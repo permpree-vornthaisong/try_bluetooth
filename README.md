@@ -1,16 +1,27 @@
 # try_bluetooth
 
-A new Flutter project.
+ผมได้สร้างระบบการเชื่อมต่อและรับส่งข้อมูล Bluetooth ให้คุณแล้วครับ ประกอบด้วย:
+1. DeviceConnectionProvider.dart
+Provider สำหรับจัดการ:
 
-## Getting Started
+การเชื่อมต่อกับอุปกรณ์ BLE
+ค้นหา Services และ Characteristics
+รับข้อมูลแบบ real-time ผ่าน notifications
+ส่งข้อมูลแบบ string หรือ bytes
+เก็บประวัติข้อมูลที่ได้รับ (จำกัด 100 รายการล่าสุด)
 
-This project is a starting point for a Flutter application.
+2. DeviceConnectionPage.dart
+หน้าแสดงผลที่มี:
 
-A few resources to get you started if this is your first Flutter project:
+ปุ่มส่งตัว 'z' - ตามที่คุณต้องการ
+แสดงข้อมูลดิบที่ได้รับ ใน 3 รูปแบบ:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+HEX format (เช่น 7A 65 6C 6C 6F)
+Decimal format (เช่น 122, 101, 108, 108, 111)
+ASCII format (แสดงตัวอักษรถ้าเป็นได้)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+
+ส่งข้อมูลแบบ Custom:
+
+ส่งเป็น Text
+ส่งเป็น HEX (รองรับการพิมพ์แบบ "7A" หรือ "48 65 6C 6C 6F")
