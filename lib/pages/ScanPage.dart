@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:try_bluetooth/pages/DeviceConnectionPage.dart';
 import 'package:try_bluetooth/providers/ScanProvider.dart';
 
 class ScanPage extends StatelessWidget {
@@ -221,11 +222,25 @@ class ScanPage extends StatelessWidget {
                               trailing: IconButton(
                                 icon: const Icon(Icons.arrow_forward_ios),
                                 onPressed: () {
-                                  scanProvider.connectToDevice(device);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => DeviceConnectionPage(
+                                        deviceInfo: device,
+                                      ),
+                                    ),
+                                  );
                                 },
                               ),
                               onTap: () {
-                                scanProvider.connectToDevice(device);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => DeviceConnectionPage(
+                                      deviceInfo: device,
+                                    ),
+                                  ),
+                                );
                               },
                             ),
                           );
