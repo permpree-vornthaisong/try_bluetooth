@@ -7,10 +7,8 @@ import 'package:try_bluetooth/providers/ScanProvider.dart';
 class DeviceConnectionPage extends StatefulWidget {
   final BluetoothDeviceInfo deviceInfo;
 
-  const DeviceConnectionPage({
-    Key? key,
-    required this.deviceInfo,
-  }) : super(key: key);
+  const DeviceConnectionPage({Key? key, required this.deviceInfo})
+    : super(key: key);
 
   @override
   State<DeviceConnectionPage> createState() => _DeviceConnectionPageState();
@@ -24,12 +22,14 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
   @override
   void initState() {
     super.initState();
-    // เชื่อมต่อทันทีเมื่อเปิดหน้า
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.deviceInfo.bleDevice != null) {
+        print('Connecting to device: ${widget.deviceInfo.name}');
         context.read<DeviceConnectionProvider>().connectToDevice(
-              widget.deviceInfo.bleDevice!,
-            );
+          widget.deviceInfo.bleDevice!,
+        );
+      } else {
+        print('Device info is null');
       }
     });
   }
@@ -57,9 +57,12 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                       : Icons.bluetooth_disabled,
                   color: provider.isConnected ? Colors.green : Colors.red,
                 ),
-                onPressed: provider.isConnected
-                    ? () => provider.disconnect()
-                    : () => provider.connectToDevice(widget.deviceInfo.bleDevice!),
+                onPressed:
+                    provider.isConnected
+                        ? () => provider.disconnect()
+                        : () => provider.connectToDevice(
+                          widget.deviceInfo.bleDevice!,
+                        ),
               );
             },
           ),
@@ -67,15 +70,24 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
       ),
       body: Consumer<DeviceConnectionProvider>(
         builder: (context, provider, child) {
+          if (provider.isConnecting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!provider.isConnected) {
+            return const Center(child: Text('กรุณาเชื่อมต่อกับอุปกรณ์'));
+          }
+
           return Column(
             children: [
               // Status Card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
-                color: provider.isConnected
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.orange.withOpacity(0.1),
+                color:
+                    provider.isConnected
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.orange.withOpacity(0.1),
                 child: Column(
                   children: [
                     Row(
@@ -85,11 +97,12 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                           provider.isConnected
                               ? Icons.check_circle
                               : provider.isConnecting
-                                  ? Icons.sync
-                                  : Icons.error_outline,
-                          color: provider.isConnected
-                              ? Colors.green
-                              : Colors.orange,
+                              ? Icons.sync
+                              : Icons.error_outline,
+                          color:
+                              provider.isConnected
+                                  ? Colors.green
+                                  : Colors.orange,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -101,10 +114,7 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                     const SizedBox(height: 8),
                     Text(
                       'Address: ${widget.deviceInfo.address}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -154,74 +164,22 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                       ),
                       const Divider(),
                       Expanded(
-                        child: provider.receivedData.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'ยังไม่มีข้อมูล',
-                                  style: TextStyle(color: Colors.grey),
+                        child:
+                            provider.receivedData.isEmpty
+                                ? const Center(
+                                  child: Text(
+                                    'ยังไม่มีข้อมูล',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                                : ListView.builder(
+                                  controller: _scrollController,
+                                  itemCount: provider.receivedData.length,
+                                  itemBuilder: (context, index) {
+                                    final data = provider.receivedData[index];
+                                    return Text('Data: $data');
+                                  },
                                 ),
-                              )
-                            : ListView.builder(
-                                controller: _scrollController,
-                                itemCount: provider.receivedData.length,
-                                itemBuilder: (context, index) {
-                                  final data = provider.receivedData[index];
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: Colors.grey[200]!,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Packet #${index + 1}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.blue,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        // แสดงเป็น Hex
-                                        Text(
-                                          'HEX: ${data.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ')}',
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        // แสดงเป็น Decimal
-                                        Text(
-                                          'DEC: ${data.join(', ')}',
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 12,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        // แสดงเป็น ASCII (ถ้าเป็นได้)
-                                        Text(
-                                          'ASCII: ${String.fromCharCodes(data.where((b) => b >= 32 && b <= 126))}',
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 12,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
                       ),
                     ],
                   ),
@@ -284,7 +242,8 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                             child: TextField(
                               controller: _hexController,
                               decoration: InputDecoration(
-                                hintText: 'ส่ง HEX (เช่น 7A หรือ 48 65 6C 6C 6F)',
+                                hintText:
+                                    'ส่ง HEX (เช่น 7A หรือ 48 65 6C 6C 6F)',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -308,8 +267,12 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                                   final hexString = _hexController.text
                                       .replaceAll(' ', '');
                                   final bytes = <int>[];
-                                  
-                                  for (int i = 0; i < hexString.length; i += 2) {
+
+                                  for (
+                                    int i = 0;
+                                    i < hexString.length;
+                                    i += 2
+                                  ) {
                                     final hex = hexString.substring(
                                       i,
                                       i + 2 <= hexString.length
@@ -318,13 +281,15 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                                     );
                                     bytes.add(int.parse(hex, radix: 16));
                                   }
-                                  
+
                                   provider.sendBytes(bytes);
                                   _hexController.clear();
                                 } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('รูปแบบ HEX ไม่ถูกต้อง: $e'),
+                                      content: Text(
+                                        'รูปแบบ HEX ไม่ถูกต้อง: $e',
+                                      ),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
