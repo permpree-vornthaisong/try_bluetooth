@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:try_bluetooth/pages/WeightCalibrationPage.dart';
 import 'package:try_bluetooth/providers/DeviceConnectionProvider.dart';
 import 'package:try_bluetooth/providers/ScanProvider.dart';
 
@@ -61,6 +62,17 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                         : () => provider.connectToDevice(
                           widget.deviceInfo.bleDevice!,
                         ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.scale),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => WeightCalibrationPage(),
+                ),
               );
             },
           ),

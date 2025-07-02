@@ -1,95 +1,112 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/providers/DeviceConnectionProvider.dart';
 
 class WeightCalibrationPage extends StatelessWidget {
-  const WeightCalibrationPage({Key? key}) : super(key: key);
-
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<DeviceConnectionProvider>(context);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Calibration & Weight'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Zero Factor Section
-            Text(
-              'Zero Factor',
-              style: Theme.of(context).textTheme.headline6,
-            ),
-            ElevatedButton(
-              onPressed: () {
-                provider.sendData('Z'); // ส่งคำสั่ง Zero Factor
-              },
-              child: const Text('Set Zero Factor'),
-            ),
-            const SizedBox(height: 16),
-
-            // Calibration Factor Section
-            Text(
-              'Calibration Factor',
-              style: Theme.of(context).textTheme.headline6,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Enter known weight (kg)',
+      appBar: AppBar(title: const Text('Weight Calibration')),
+      body: Consumer<DeviceConnectionProvider>(
+        builder: (context, deviceProvider, child) {
+          return Column(
+            children: [
+              // แสดงสถานะการเชื่อมต่อ
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color:
+                    deviceProvider.isConnected
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.red.withOpacity(0.1),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      deviceProvider.isConnected
+                          ? Icons.bluetooth_connected
+                          : Icons.bluetooth_disabled,
+                      color:
+                          deviceProvider.isConnected
+                              ? Colors.green
+                              : Colors.red,
                     ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) {
-                      provider.calibrationWeight = value; // เก็บน้ำหนักที่ป้อน
-                    },
+                    const SizedBox(width: 8),
+                    Text(
+                      deviceProvider.isConnected
+                          ? 'Connected to Device'
+                          : 'Not Connected',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // แสดงข้อมูลน้ำหนักที่ได้รับ
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[50],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Last 10 Weights:',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Divider(),
+                      Expanded(
+                        child:
+                            deviceProvider.receivedData.isEmpty
+                                ? const Center(
+                                  child: Text(
+                                    'No weight data received yet.',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                                : ListView.builder(
+                                  itemCount: deviceProvider.receivedData.length,
+                                  itemBuilder: (context, index) {
+                                    final rawData =
+                                        deviceProvider.receivedData[index];
+                                    final weight = _parseWeight(
+                                      rawData,
+                                    ); // แปลงข้อมูลเป็นน้ำหนัก
+                                    return ListTile(
+                                      title: Text('Weight: $weight kg'),
+                                    );
+                                  },
+                                ),
+                      ),
+                    ],
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (provider.calibrationWeight != null) {
-                      provider.sendData('F${provider.calibrationWeight}');
-                    }
-                  },
-                  child: const Text('Calibrate'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Read Weight Section
-            Text(
-              'Read Weight',
-              style: Theme.of(context).textTheme.headline6,
-            ),
-            ElevatedButton(
-              onPressed: () {
-                provider.sendData('O'); // ส่งคำสั่งเปิดการอ่านน้ำหนัก
-              },
-              child: const Text('Start Reading Weight'),
-            ),
-            const SizedBox(height: 16),
-
-            // Display Weight
-            Text(
-              'Current Weight:',
-              style: Theme.of(context).textTheme.headline6,
-            ),
-            Consumer<DeviceConnectionProvider>(
-              builder: (context, provider, child) {
-                return Text(
-                  provider.currentWeight ?? 'No data',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                );
-              },
-            ),
-          ],
-        ),
+              ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  // ฟังก์ชันแปลงข้อมูลเป็นน้ำหนัก
+  double _parseWeight(Uint8List rawData) {
+    try {
+      final asciiData = String.fromCharCodes(rawData);
+      return double.tryParse(asciiData) ?? 0.0; // แปลงเป็น double
+    } catch (e) {
+      return 0.0; // กรณีแปลงไม่ได้
+    }
   }
 }

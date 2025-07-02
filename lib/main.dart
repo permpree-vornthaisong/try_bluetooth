@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:try_bluetooth/pages/ScanPage.dart';
 import 'package:try_bluetooth/providers/DeviceConnectionProvider.dart';
 import 'package:try_bluetooth/providers/ScanProvider.dart';
+import 'package:try_bluetooth/providers/WeightCalibrationProvider.dart';
 
 void main() {
   runApp(
@@ -10,6 +11,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => ScanProvider()),
         ChangeNotifierProvider(create: (_) => DeviceConnectionProvider()),
+        ChangeNotifierProvider(create: (_) => WeightCalibrationProvider()),
       ],
       child: MyApp(),
     ),
