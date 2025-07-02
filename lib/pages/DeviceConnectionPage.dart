@@ -71,7 +71,7 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => WeightCalibrationPage(),
+                  builder: (context) => WeightDisplayWidget(),
                 ),
               );
             },

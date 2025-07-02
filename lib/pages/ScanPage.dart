@@ -263,7 +263,7 @@ class ScanPage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => WeightCalibrationPage(),
+                    builder: (context) =>WeightDisplayWidget(),
                   ),
                 );
               },
