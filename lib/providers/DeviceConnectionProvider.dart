@@ -52,8 +52,11 @@ class DeviceConnectionProvider extends ChangeNotifier {
       // เชื่อมต่อ
       await device.connect(autoConnect: false);
 
-      // ค้นหา services
+      // ค้นหา services และ characteristics
       await discoverServices();
+      if (_notifyCharacteristic != null) {
+        await startNotifications(); // เริ่มฟังข้อมูล
+      }
 
       _isConnecting = false;
       notifyListeners();
@@ -84,9 +87,10 @@ class DeviceConnectionProvider extends ChangeNotifier {
           
           if (characteristic.properties.notify || 
               characteristic.properties.indicate) {
-            _notifyCharacteristic = characteristic;
-            // เริ่มรับข้อมูล
-            await startNotifications();
+            if (characteristic.uuid.toString() == 'abcdef01-1234-5678-1234-56789abcdef0') {
+              _notifyCharacteristic = characteristic;
+              await startNotifications();
+            }
           }
         }
       }
@@ -100,14 +104,23 @@ class DeviceConnectionProvider extends ChangeNotifier {
   }
 
   Future<void> startNotifications() async {
-    if (_notifyCharacteristic == null) return;
+    if (_notifyCharacteristic == null) {
+      _statusMessage = 'ไม่พบ characteristic สำหรับรับข้อมูล';
+      notifyListeners();
+      return;
+    }
 
     try {
       await _notifyCharacteristic!.setNotifyValue(true);
-      
-      _dataSubscription = _notifyCharacteristic!.value.listen((data) {
+      _notifyCharacteristic!.value.listen((data) {
         if (data.isNotEmpty) {
+          // แปลงข้อมูลที่ได้รับเป็นข้อความ
+          String receivedData = String.fromCharCodes(data);
+          debugPrint('Received Data: $receivedData');
+
+          // เก็บข้อมูลใน _receivedData
           _receivedData.add(Uint8List.fromList(data));
+
           // เก็บแค่ 100 รายการล่าสุด
           if (_receivedData.length > 100) {
             _receivedData.removeAt(0);
@@ -115,6 +128,8 @@ class DeviceConnectionProvider extends ChangeNotifier {
           notifyListeners();
         }
       });
+      _statusMessage = 'เริ่มรับข้อมูลสำเร็จ';
+      notifyListeners();
     } catch (e) {
       _statusMessage = 'เริ่มรับข้อมูลล้มเหลว: $e';
       notifyListeners();
@@ -203,5 +218,13 @@ class DeviceConnectionProvider extends ChangeNotifier {
   void dispose() {
     disconnect();
     super.dispose();
+  }
+}
+
+String convertToAscii(Uint8List data) {
+  try {
+    return String.fromCharCodes(data);
+  } catch (e) {
+    return 'Error converting to ASCII: $e';
   }
 }

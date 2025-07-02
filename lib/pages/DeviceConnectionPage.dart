@@ -22,14 +22,12 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
   @override
   void initState() {
     super.initState();
+
+    // เชื่อมต่อกับอุปกรณ์เมื่อเปิดหน้า
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.deviceInfo.bleDevice != null) {
-        print('Connecting to device: ${widget.deviceInfo.name}');
-        context.read<DeviceConnectionProvider>().connectToDevice(
-          widget.deviceInfo.bleDevice!,
-        );
-      } else {
-        print('Device info is null');
+      final provider = context.read<DeviceConnectionProvider>();
+      if (!provider.isConnected) {
+        provider.connectToDevice(widget.deviceInfo.bleDevice!);
       }
     });
   }
@@ -164,22 +162,27 @@ class _DeviceConnectionPageState extends State<DeviceConnectionPage> {
                       ),
                       const Divider(),
                       Expanded(
-                        child:
-                            provider.receivedData.isEmpty
+                        child: Consumer<DeviceConnectionProvider>(
+                          builder: (context, provider, child) {
+                            return provider.receivedData.isEmpty
                                 ? const Center(
-                                  child: Text(
-                                    'ยังไม่มีข้อมูล',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                )
+                                    child: Text(
+                                      'ยังไม่มีข้อมูล',
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  )
                                 : ListView.builder(
-                                  controller: _scrollController,
-                                  itemCount: provider.receivedData.length,
-                                  itemBuilder: (context, index) {
-                                    final data = provider.receivedData[index];
-                                    return Text('Data: $data');
-                                  },
-                                ),
+                                    itemCount: provider.receivedData.length,
+                                    itemBuilder: (context, index) {
+                                      final rawData = provider.receivedData[index];
+                                      final asciiData = String.fromCharCodes(rawData);
+                                      return ListTile(
+                                        title: Text('Received: $asciiData'),
+                                      );
+                                    },
+                                  );
+                          },
+                        ),
                       ),
                     ],
                   ),
