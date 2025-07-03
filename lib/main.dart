@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:try_bluetooth/pages/SettingsPage.dart';
 import 'package:try_bluetooth/pages/DisplayPage.dart';
 import 'package:try_bluetooth/widgets/CalibrationWidget.dart';
+import 'package:try_bluetooth/widgets/FactoryCalibrationWidget.dart';
 import 'package:try_bluetooth/providers/NavigationBar1Provider.dart';
 import 'package:try_bluetooth/providers/SettingProvider.dart';
 import 'package:try_bluetooth/providers/DisplayProvider.dart';
 import 'package:try_bluetooth/providers/CalibrationProvider.dart';
+import 'package:try_bluetooth/providers/FactoryCalibrationProvider.dart';
 
 /// Flutter code sample for [NavigationBar] using Provider pattern.
 
@@ -29,6 +31,7 @@ class MyApp extends StatelessWidget {
           ChangeNotifierProvider(create: (context) => SettingProvider()),
           ChangeNotifierProvider(create: (context) => DisplayProvider()),
           ChangeNotifierProvider(create: (context) => CalibrationProvider()),
+          ChangeNotifierProvider(create: (context) => FactoryCalibrationProvider()),
         ],
         child: const NavigationExample(),
       ),
@@ -61,6 +64,10 @@ class NavigationExample extends StatelessWidget {
               NavigationDestination(
                 icon: Badge(child: Icon(Icons.tune)),
                 label: 'Calibration',
+              ),
+              NavigationDestination(
+                icon: Badge(child: Icon(Icons.factory)),
+                label: 'Factory',
               ),
               NavigationDestination(
                 icon: Badge(child: Icon(Icons.notifications_sharp)),
@@ -100,8 +107,10 @@ class NavigationExample extends StatelessWidget {
       case 1:
         return const CalibrationWidget(); // Weight Calibration page
       case 2:
-        return _buildNotificationsPage();
+        return const FactoryCalibrationWidget(); // Factory Calibration page
       case 3:
+        return _buildNotificationsPage();
+      case 4:
         return const SettingsPage(); // BLE Settings page
       default:
         return const DisplayPage();

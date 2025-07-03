@@ -54,6 +54,18 @@ class CalibrationProvider extends ChangeNotifier {
   double? _currentRawValue;
   String _calibrationStep = 'idle'; // 'idle', 'waiting_for_weight', 'enter_actual_weight'
   
+  // Quick calibration process
+  bool _isQuickCalibrating = false;
+  double? _zeroValue; // ค่าเมื่อไม่มีน้ำหนัก
+  double? _weightedValue; // ค่าเมื่อมีน้ำหนัก
+  double? _knownWeight; // น้ำหนักที่ทราบ
+  String _quickCalibrationStep = 'idle'; // 'idle', 'waiting_zero', 'waiting_weight'
+  
+  // Average calculation for readings
+  List<double> _recentReadings = [];
+  int _maxReadingsForAverage = 10;
+  bool _useAverageForCalibration = true;
+  
   // Stats
   double? _averageError;
   double? _maxError;
@@ -70,9 +82,97 @@ class CalibrationProvider extends ChangeNotifier {
   double? get averageError => _averageError;
   double? get maxError => _maxError;
   int get totalCalibrations => _totalCalibrations;
+  
+  // Quick calibration getters
+  bool get isQuickCalibrating => _isQuickCalibrating;
+  String get quickCalibrationStep => _quickCalibrationStep;
+  double? get zeroValue => _zeroValue;
+  double? get weightedValue => _weightedValue;
+  double? get knownWeight => _knownWeight;
+  
+  // Average calculation getters
+  List<double> get recentReadings => List.unmodifiable(_recentReadings);
+  int get maxReadingsForAverage => _maxReadingsForAverage;
+  bool get useAverageForCalibration => _useAverageForCalibration;
+  double? get currentAverageReading => _recentReadings.isEmpty ? null : _recentReadings.reduce((a, b) => a + b) / _recentReadings.length;
 
   CalibrationProvider() {
     _initializeDatabase();
+  }
+
+  // Method to add new reading and maintain running average
+  void addReading(double reading) {
+    _recentReadings.add(reading);
+    
+    // Keep only the last N readings for average calculation
+    if (_recentReadings.length > _maxReadingsForAverage) {
+      _recentReadings.removeAt(0);
+    }
+    
+    notifyListeners();
+    
+    if (kDebugMode) {
+      print('Added reading: $reading, Current average: ${currentAverageReading?.toStringAsFixed(3)}');
+    }
+  }
+
+  // Method to get the value to use for calibration (average or current)
+  double? getValueForCalibration() {
+    if (_useAverageForCalibration && _recentReadings.isNotEmpty) {
+      return currentAverageReading;
+    }
+    return _recentReadings.isNotEmpty ? _recentReadings.last : null;
+  }
+
+  // Method to set whether to use average for calibration
+  void setUseAverageForCalibration(bool useAverage) {
+    _useAverageForCalibration = useAverage;
+    notifyListeners();
+  }
+
+  // Method to set max readings for average
+  void setMaxReadingsForAverage(int maxReadings) {
+    if (maxReadings > 0) {
+      _maxReadingsForAverage = maxReadings;
+      
+      // Trim existing readings if new max is smaller
+      while (_recentReadings.length > _maxReadingsForAverage) {
+        _recentReadings.removeAt(0);
+      }
+      
+      notifyListeners();
+    }
+  }
+
+  // Method to clear recent readings
+  void clearRecentReadings() {
+    _recentReadings.clear();
+    notifyListeners();
+  }
+
+  // Method to get statistics of recent readings
+  Map<String, double> getReadingStatistics() {
+    if (_recentReadings.isEmpty) {
+      return {'count': 0, 'average': 0, 'min': 0, 'max': 0, 'standardDeviation': 0};
+    }
+
+    double average = currentAverageReading!;
+    double min = _recentReadings.reduce((a, b) => a < b ? a : b);
+    double max = _recentReadings.reduce((a, b) => a > b ? a : b);
+    
+    // Calculate standard deviation
+    double variance = _recentReadings
+        .map((reading) => (reading - average) * (reading - average))
+        .reduce((a, b) => a + b) / _recentReadings.length;
+    double standardDeviation = variance.isFinite ? variance : 0.0;
+
+    return {
+      'count': _recentReadings.length.toDouble(),
+      'average': average,
+      'min': min,
+      'max': max,
+      'standardDeviation': standardDeviation,
+    };
   }
 
   Future<void> _initializeDatabase() async {
@@ -255,6 +355,67 @@ class CalibrationProvider extends ChangeNotifier {
     if (_calibrationStep == 'idle') {
       _calibrationStep = 'waiting_for_weight';
     }
+    notifyListeners();
+  }
+
+  // Quick calibration methods
+  void startQuickCalibration() {
+    _isQuickCalibrating = true;
+    _quickCalibrationStep = 'waiting_zero';
+    _zeroValue = null;
+    _weightedValue = null;
+    _knownWeight = null;
+    notifyListeners();
+  }
+
+  void captureZeroReading(double rawValue) {
+    if (_quickCalibrationStep == 'waiting_zero') {
+      // Use average if available and enabled
+      double valueToUse = _useAverageForCalibration && currentAverageReading != null 
+          ? currentAverageReading! 
+          : rawValue;
+      
+      _zeroValue = valueToUse;
+      _quickCalibrationStep = 'waiting_weight';
+      notifyListeners();
+      
+      if (kDebugMode) {
+        print('Captured zero reading: $valueToUse (from ${_useAverageForCalibration ? 'average' : 'current'})');
+      }
+    }
+  }
+
+  Future<void> captureWeightReading(double rawValue, double knownWeight) async {
+    if (_quickCalibrationStep == 'waiting_weight' && _zeroValue != null) {
+      // Use average if available and enabled
+      double valueToUse = _useAverageForCalibration && currentAverageReading != null 
+          ? currentAverageReading! 
+          : rawValue;
+      
+      _weightedValue = valueToUse;
+      _knownWeight = knownWeight;
+      
+      // Add two calibration points automatically
+      await addCalibrationPoint(_zeroValue!, 0.0, notes: 'Zero point (Quick Cal - ${_useAverageForCalibration ? 'Average' : 'Single'})');
+      await addCalibrationPoint(_weightedValue!, _knownWeight!, notes: 'Weight point (Quick Cal - ${_useAverageForCalibration ? 'Average' : 'Single'})');
+      
+      // Complete quick calibration
+      _isQuickCalibrating = false;
+      _quickCalibrationStep = 'idle';
+      notifyListeners();
+      
+      if (kDebugMode) {
+        print('Captured weight reading: $valueToUse for $knownWeight kg (from ${_useAverageForCalibration ? 'average' : 'current'})');
+      }
+    }
+  }
+
+  void cancelQuickCalibration() {
+    _isQuickCalibrating = false;
+    _quickCalibrationStep = 'idle';
+    _zeroValue = null;
+    _weightedValue = null;
+    _knownWeight = null;
     notifyListeners();
   }
 
