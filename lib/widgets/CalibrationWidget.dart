@@ -1,0 +1,736 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/CalibrationProvider.dart';
+import '../providers/SettingProvider.dart';
+
+class CalibrationWidget extends StatefulWidget {
+  const CalibrationWidget({super.key});
+
+  @override
+  State<CalibrationWidget> createState() => _CalibrationWidgetState();
+}
+
+class _CalibrationWidgetState extends State<CalibrationWidget> {
+  final TextEditingController _actualWeightController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _rawValueController = TextEditingController();
+
+  @override
+  void dispose() {
+    _actualWeightController.dispose();
+    _notesController.dispose();
+    _rawValueController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Weight Calibration'),
+        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+        actions: [
+          Consumer<CalibrationProvider>(
+            builder: (context, calibrationProvider, child) {
+              return PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'export':
+                      _showExportDialog(context, calibrationProvider);
+                      break;
+                  }
+                },
+                itemBuilder:
+                    (context) => [
+                      const PopupMenuItem(
+                        value: 'stats',
+                        child: Row(
+                          children: [
+                            Icon(Icons.analytics),
+                            SizedBox(width: 8),
+                            Text('Statistics'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'export',
+                        child: Row(
+                          children: [
+                            Icon(Icons.download),
+                            SizedBox(width: 8),
+                            Text('Export Data'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'clear_all',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_sweep, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text(
+                              'Clear All',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+              );
+            },
+          ),
+        ],
+      ),
+      body: Consumer2<CalibrationProvider, SettingProvider>(
+        builder: (context, calibrationProvider, settingProvider, child) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildConnectionStatus(settingProvider),
+                const SizedBox(height: 16),
+                _buildCalibrationStatus(calibrationProvider),
+                const SizedBox(height: 16),
+                _buildCurrentWeightDisplay(
+                  settingProvider,
+                  calibrationProvider,
+                ),
+                const SizedBox(height: 16),
+                _buildCalibrationForm(calibrationProvider, settingProvider),
+                const SizedBox(height: 16),
+                _buildCalibrationPointsList(calibrationProvider),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildConnectionStatus(SettingProvider settingProvider) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Icon(
+              settingProvider.connectedDevice != null
+                  ? Icons.bluetooth_connected
+                  : Icons.bluetooth_disabled,
+              color:
+                  settingProvider.connectedDevice != null
+                      ? Colors.green
+                      : Colors.red,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    settingProvider.connectionStatus,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  if (settingProvider.connectedDevice != null)
+                    Text(
+                      'Device: ${settingProvider.getBLEDeviceDisplayName(settingProvider.connectedDevice!)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalibrationStatus(CalibrationProvider calibrationProvider) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  calibrationProvider.isCalibrated
+                      ? Icons.check_circle
+                      : Icons.warning,
+                  color:
+                      calibrationProvider.isCalibrated
+                          ? Colors.green
+                          : Colors.orange,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  calibrationProvider.isCalibrated
+                      ? 'Calibrated'
+                      : 'Not Calibrated',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (calibrationProvider.isCalibrated) ...[
+              Text(
+                'Calibration Points: ${calibrationProvider.calibrationPoints.length}',
+              ),
+              Text(
+                'Accuracy: ${calibrationProvider.getCalibrationAccuracy().toStringAsFixed(2)}%',
+              ),
+              if (calibrationProvider.averageError != null)
+                Text(
+                  'Average Error: ±${calibrationProvider.averageError!.toStringAsFixed(3)} kg',
+                ),
+            ] else ...[
+              const Text(
+                'Add at least 2 calibration points to enable calibration',
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentWeightDisplay(
+    SettingProvider settingProvider,
+    CalibrationProvider calibrationProvider,
+  ) {
+    // Get current raw value from BLE data
+    double? currentRawValue;
+    String rawText = 'No Data';
+
+    if (settingProvider.characteristicValues.isNotEmpty) {
+      // Get the latest characteristic value
+      final firstValue = settingProvider.characteristicValues.values.first;
+      if (firstValue is List<int> && firstValue.isNotEmpty) {
+        try {
+          String receivedText = String.fromCharCodes(firstValue).trim();
+          rawText = receivedText;
+
+          // Parse weight from format "Weight: 7393.00 kg"
+          currentRawValue = _parseWeightFromText(receivedText);
+        } catch (e) {
+          rawText = 'Parse Error';
+        }
+      }
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Current Weight Reading',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 16),
+            // Show raw received text
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Received Data:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  Text(
+                    rawText,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text('Raw Value'),
+                      Text(
+                        currentRawValue?.toStringAsFixed(2) ?? 'No Data',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Text(
+                        '(parsed)',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward),
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text('Calibrated Weight'),
+                      Text(
+                        currentRawValue != null
+                            ? '${calibrationProvider.convertRawToWeight(currentRawValue).toStringAsFixed(2)} kg'
+                            : 'No Data',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              calibrationProvider.isCalibrated
+                                  ? Colors.green
+                                  : Colors.orange,
+                        ),
+                      ),
+                      Text(
+                        calibrationProvider.isCalibrated
+                            ? '(calibrated)'
+                            : '(not calibrated)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color:
+                              calibrationProvider.isCalibrated
+                                  ? Colors.green
+                                  : Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed:
+                    currentRawValue != null &&
+                            !calibrationProvider.isCalibrating
+                        ? () => calibrationProvider.startCalibration(
+                          currentRawValue!,
+                        )
+                        : null,
+                icon: const Icon(Icons.add),
+                label: const Text('Use Current Reading for Calibration'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade100,
+                  foregroundColor: Colors.blue.shade800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper method to parse weight from text like "Weight: 7393.00 kg"
+  double? _parseWeightFromText(String text) {
+    try {
+      // Remove any non-numeric characters except decimal point and minus sign
+      // Look for pattern like "Weight: 7393.00 kg" or just "7393.00"
+
+      // Try to find number after "Weight:" if present
+      RegExp weightPattern = RegExp(
+        r'Weight:\s*([+-]?\d+\.?\d*)',
+        caseSensitive: false,
+      );
+      Match? match = weightPattern.firstMatch(text);
+
+      if (match != null) {
+        return double.tryParse(match.group(1)!);
+      }
+
+      // If no "Weight:" pattern, try to extract any number from the text
+      RegExp numberPattern = RegExp(r'([+-]?\d+\.?\d*)');
+      match = numberPattern.firstMatch(text);
+
+      if (match != null) {
+        return double.tryParse(match.group(1)!);
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Widget _buildCalibrationForm(
+    CalibrationProvider calibrationProvider,
+    SettingProvider settingProvider,
+  ) {
+    if (!calibrationProvider.isCalibrating) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Manual Calibration Entry',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _rawValueController,
+                decoration: const InputDecoration(
+                  labelText: 'Raw Value',
+                  hintText: 'Enter raw sensor value',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _actualWeightController,
+                decoration: const InputDecoration(
+                  labelText: 'Actual Weight (kg)',
+                  hintText: 'Enter known weight',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (optional)',
+                  hintText: 'Add notes about this calibration point',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed:
+                      () => _addManualCalibrationPoint(calibrationProvider),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Calibration Point'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade100,
+                    foregroundColor: Colors.green.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Calibration in progress
+    return Card(
+      color: Colors.blue.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.settings, color: Colors.blue),
+                const SizedBox(width: 8),
+                const Text(
+                  'Calibration in Progress',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Raw Value: ${calibrationProvider.currentRawValue?.toStringAsFixed(3)}',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _actualWeightController,
+              decoration: const InputDecoration(
+                labelText: 'Actual Weight (kg)',
+                hintText: 'Enter the known weight',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(
+                labelText: 'Notes (optional)',
+                hintText: 'Add notes about this calibration',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      calibrationProvider.cancelCalibration();
+                      _actualWeightController.clear();
+                      _notesController.clear();
+                    },
+                    icon: const Icon(Icons.cancel),
+                    label: const Text('Cancel'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade100,
+                      foregroundColor: Colors.red.shade800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _completeCalibration(calibrationProvider),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Save'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade100,
+                      foregroundColor: Colors.green.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalibrationPointsList(CalibrationProvider calibrationProvider) {
+    if (calibrationProvider.calibrationPoints.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Center(
+            child: Column(
+              children: [
+                Icon(Icons.scale, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                Text(
+                  'No Calibration Points',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add calibration points to improve accuracy',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Calibration Points (${calibrationProvider.calibrationPoints.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: calibrationProvider.calibrationPoints.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final point = calibrationProvider.calibrationPoints[index];
+              final predictedWeight = calibrationProvider.convertRawToWeight(
+                point.rawValue,
+              );
+              final error = (predictedWeight - point.actualWeight).abs();
+
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.blue.shade100,
+                  child: Text('${index + 1}'),
+                ),
+                title: Text('${point.actualWeight} kg'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Raw: ${point.rawValue.toStringAsFixed(3)}'),
+                    if (calibrationProvider.isCalibrated)
+                      Text(
+                        'Error: ±${error.toStringAsFixed(3)} kg',
+                        style: TextStyle(
+                          color: error > 0.1 ? Colors.red : Colors.green,
+                          fontSize: 12,
+                        ),
+                      ),
+                    Text(
+                      point.timestamp.toString().substring(0, 19),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (point.notes != null && point.notes!.isNotEmpty)
+                      Text(
+                        point.notes!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
+                ),
+                trailing: IconButton(
+                  onPressed:
+                      () => _confirmDeletePoint(
+                        context,
+                        calibrationProvider,
+                        point,
+                      ),
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addManualCalibrationPoint(CalibrationProvider calibrationProvider) {
+    final rawValue = double.tryParse(_rawValueController.text);
+    final actualWeight = double.tryParse(_actualWeightController.text);
+
+    if (rawValue == null || actualWeight == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter valid numbers')),
+      );
+      return;
+    }
+
+    calibrationProvider.addCalibrationPoint(
+      rawValue,
+      actualWeight,
+      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+    );
+
+    _rawValueController.clear();
+    _actualWeightController.clear();
+    _notesController.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Calibration point added successfully')),
+    );
+  }
+
+  void _completeCalibration(CalibrationProvider calibrationProvider) {
+    final actualWeight = double.tryParse(_actualWeightController.text);
+
+    if (actualWeight == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid weight')),
+      );
+      return;
+    }
+
+    calibrationProvider.completeCalibration(
+      actualWeight,
+      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+    );
+
+    _actualWeightController.clear();
+    _notesController.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Calibration completed successfully')),
+    );
+  }
+
+  void _confirmDeletePoint(
+    BuildContext context,
+    CalibrationProvider calibrationProvider,
+    CalibrationData point,
+  ) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Calibration Point'),
+            content: Text(
+              'Are you sure you want to delete the calibration point for ${point.actualWeight} kg?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  calibrationProvider.removeCalibrationPoint(point.id!);
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Calibration point deleted')),
+                  );
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showExportDialog(
+    BuildContext context,
+    CalibrationProvider calibrationProvider,
+  ) {
+    final exportData = calibrationProvider.exportCalibrationData();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Export Calibration Data'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  exportData,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+}

@@ -21,7 +21,7 @@ class WeightCalibrationProvider extends ChangeNotifier {
   set deviceProvider(DeviceConnectionProvider provider) {
     _deviceProvider = provider;
   }
-
+//CalibrationWidget.dart 
   void connect() {
     _isConnected = true;
     notifyListeners();

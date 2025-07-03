@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:try_bluetooth/providers/SettingProvider.dart';
+
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -321,7 +322,7 @@ class SettingsPage extends StatelessWidget {
                           final value = provider.characteristicValues[char.uuid.toString()];
                           return ListTile(
                             dense: true,
-                            title: Text('${_formatUUID(char.uuid.toString())}'),
+                            title: Text('Characteristic: ${_formatUUID(char.uuid.toString())}'),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -410,10 +411,21 @@ class SettingsPage extends StatelessWidget {
   }
 
   String _formatUUID(String uuid) {
-    if (uuid.length >= 8) {
-      return '${uuid.substring(0, 8)}...';
-    } else {
-      return uuid;
+    try {
+      if (uuid.isEmpty) return 'Unknown UUID';
+      
+      // Remove dashes and spaces
+      String cleanUuid = uuid.replaceAll('-', '').replaceAll(' ', '');
+      
+      if (cleanUuid.length >= 8) {
+        return '${cleanUuid.substring(0, 8)}...';
+      } else if (cleanUuid.length >= 4) {
+        return '${cleanUuid.substring(0, 4)}...';
+      } else {
+        return cleanUuid;
+      }
+    } catch (e) {
+      return 'Invalid UUID';
     }
   }
 
