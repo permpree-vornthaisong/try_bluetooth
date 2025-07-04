@@ -268,6 +268,7 @@ class CalibrationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+
   void _calculateCalibration() {
     if (_calibrationPoints.length < 2) {
       _slope = null;

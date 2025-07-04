@@ -27,6 +27,15 @@ class SettingProvider extends ChangeNotifier {
   StreamSubscription<BluetoothConnectionState>? _connectionStateSubscription;
   List<StreamSubscription> _characteristicSubscriptions = [];
 
+  // Add subscription control
+  bool _autoSubscribeEnabled = true;
+  Map<String, bool> _characteristicSubscriptions_status = {};
+
+  // ✅ เพิ่มส่วนนี้ - Raw value storage for calibration
+  double? _currentRawValue;
+  String? _primaryCharacteristicUuid; // UUID of main weight characteristic
+  String _lastRawText = ''; // Store last received text for debugging
+
   // Getters
   BluetoothAdapterState get adapterState => _adapterState;
   bool get isScanning => _isScanning;
@@ -38,15 +47,82 @@ class SettingProvider extends ChangeNotifier {
   List<BluetoothService> get services => _services;
   Map<String, List<BluetoothCharacteristic>> get characteristics => _characteristics;
   Map<String, dynamic> get characteristicValues => _characteristicValues;
-  // Add subscription control
-  bool _autoSubscribeEnabled = true;
-  Map<String, bool> _characteristicSubscriptions_status = {};
+  
+  // ✅ เพิ่ม getters ใหม่
+  double? get currentRawValue => _currentRawValue; // Clean raw value for calibration
+  String get lastRawText => _lastRawText; // For debugging
 
   bool get autoSubscribeEnabled => _autoSubscribeEnabled;
   
   void toggleAutoSubscribe() {
     _autoSubscribeEnabled = !_autoSubscribeEnabled;
     notifyListeners();
+  }
+
+  // ✅ เพิ่ม method ใหม่ - ทำความสะอาดข้อมูลตัวเลข
+  String _cleanNumericString(String input) {
+    // ลบทุกอย่างยกเว้น ตัวเลข, จุดทศนิยม, และเครื่องหมายลบ
+    return input.replaceAll(RegExp(r'[^0-9.-]'), '');
+  }
+
+  // ✅ เพิ่ม method ใหม่ - แยกค่าตัวเลขจากข้อมูลที่รับมา
+  double? _extractRawValue(List<int> data) {
+    try {
+      // Convert bytes to string
+      String text = String.fromCharCodes(data).trim();
+      _lastRawText = text; // Store for debugging
+      
+      if (kDebugMode) {
+        print('Raw received text: "$text"');
+      }
+      
+      // Remove all non-numeric characters except decimal point and minus sign
+      String cleanText = _cleanNumericString(text);
+      
+      if (kDebugMode) {
+        print('Cleaned text: "$cleanText"');
+      }
+      
+      if (cleanText.isEmpty) {
+        return null;
+      }
+      
+      // Handle multiple decimal points - keep only the first one
+      List<String> parts = cleanText.split('.');
+      if (parts.length > 2) {
+        cleanText = '${parts[0]}.${parts.sublist(1).join('')}';
+      }
+      
+      // Try to parse as double
+      double? value = double.tryParse(cleanText);
+      
+      if (value != null && value.isFinite && !value.isNaN) {
+        if (kDebugMode) {
+          print('Extracted raw value: $value');
+        }
+        return value;
+      }
+      
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error extracting raw value: $e');
+      }
+      return null;
+    }
+  }
+
+  // ✅ เพิ่ม method ใหม่ - สำหรับ CalibrationEasy ใช้
+  double? getRawValueForCalibration() {
+    return _currentRawValue;
+  }
+
+  // ✅ เพิ่ม method ใหม่ - กำหนด characteristic หลักสำหรับน้ำหนัก
+  void setPrimaryWeightCharacteristic(String uuid) {
+    _primaryCharacteristicUuid = uuid;
+    if (kDebugMode) {
+      print('Set primary weight characteristic: $uuid');
+    }
   }
 
   Future<void> unsubscribeFromCharacteristic(BluetoothCharacteristic characteristic) async {
@@ -288,15 +364,29 @@ class SettingProvider extends ChangeNotifier {
       final subscription = characteristic.onValueReceived.listen((value) {
         _characteristicValues[characteristic.uuid.toString()] = value;
         
+        // ✅ แก้ไขส่วนนี้ - แยกค่า raw value สำหรับ calibration
+        // Extract clean raw value for calibration
+        double? rawValue = _extractRawValue(value);
+        if (rawValue != null) {
+          _currentRawValue = rawValue;
+          
+          // If this is the primary weight characteristic, update it
+          if (_primaryCharacteristicUuid == null || 
+              _primaryCharacteristicUuid == characteristic.uuid.toString()) {
+            _primaryCharacteristicUuid = characteristic.uuid.toString();
+          }
+        }
+        
         // Optional: Limit console output for frequent updates
         if (kDebugMode) {
-          print('BLE Data from ${characteristic.uuid}: ${value.length} bytes');
+          print('BLE Data from ${characteristic.uuid}: ${value.length} bytes, Raw: $rawValue');
         }
         
         notifyListeners();
       });
       
       _characteristicSubscriptions.add(subscription);
+      _characteristicSubscriptions_status[characteristic.uuid.toString()] = true;
       
       if (kDebugMode) {
         print('Subscribed to ${characteristic.uuid}');
@@ -312,6 +402,13 @@ class SettingProvider extends ChangeNotifier {
     try {
       final value = await characteristic.read();
       _characteristicValues[characteristic.uuid.toString()] = value;
+      
+      // ✅ เพิ่มส่วนนี้ - แยกค่า raw value เมื่ออ่านข้อมูล
+      double? rawValue = _extractRawValue(value);
+      if (rawValue != null) {
+        _currentRawValue = rawValue;
+      }
+      
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -379,11 +476,17 @@ class SettingProvider extends ChangeNotifier {
     _rssi = null;
     _mtu = null;
     
+    // ✅ เพิ่มส่วนนี้ - เคลียร์ raw value data
+    _currentRawValue = null;
+    _primaryCharacteristicUuid = null;
+    _lastRawText = '';
+    
     // Cancel all characteristic subscriptions
     for (var subscription in _characteristicSubscriptions) {
       subscription.cancel();
     }
     _characteristicSubscriptions.clear();
+    _characteristicSubscriptions_status.clear();
   }
 
   String getBLEDeviceDisplayName(BluetoothDevice device) {
