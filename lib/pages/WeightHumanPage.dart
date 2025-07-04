@@ -3,96 +3,97 @@ import 'package:provider/provider.dart';
 import '../providers/SettingProvider.dart';
 import '../providers/CalibrationProvider.dart';
 import '../providers/SaveHumanProvider.dart';
+import '../providers/WeightHumanProvider.dart';
 
-enum WeightMode {
-  person('ชั่งน้ำหนักคน', Icons.person, Colors.blue),
-  object('ชั่งสิ่งของ', Icons.inventory_2, Colors.green),
-  animal('ชั่งสิ่งมีชีวิต', Icons.pets, Colors.orange);
-
-  const WeightMode(this.displayName, this.icon, this.color);
-  final String displayName;
-  final IconData icon;
-  final MaterialColor color;
-}
-
-class DisplayPage extends StatefulWidget {
-  const DisplayPage({super.key});
+class WeightHumanPage extends StatefulWidget {
+  const WeightHumanPage({super.key});
 
   @override
-  State<DisplayPage> createState() => _DisplayPageState();
+  State<WeightHumanPage> createState() => _WeightHumanPageState();
 }
 
-class _DisplayPageState extends State<DisplayPage> {
-  WeightMode _selectedMode = WeightMode.person;
-  bool _isStabilizing = false;
-  List<double> _stabilityReadings = [];
-  double? _stableWeight;
-  DateTime? _lastReadingTime;
+class _WeightHumanPageState extends State<WeightHumanPage> with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
-  // Tare functionality
-  double _tareOffset = 0.0;
-  DateTime? _tareTimestamp;
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize weight provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<WeightHumanProvider>(context, listen: false).initialize();
+    });
 
-  // Settings for different modes - แก้ไข type casting
-  Map<WeightMode, Map<String, dynamic>> _modeSettings = {
-    WeightMode.person: {
-      'stabilityThreshold': 0.1, // ± 0.1 kg
-      'stabilityDuration': 3.0, // 3 seconds - เปลี่ยนเป็น double
-      'minWeight': 10.0, // minimum 10 kg
-      'maxWeight': 300.0, // maximum 300 kg
-      'precision': 1.0, // 1 decimal place - เปลี่ยนเป็น double
-      'autoTare': true,
-    },
-    WeightMode.object: {
-      'stabilityThreshold': 0.05, // ± 0.05 kg
-      'stabilityDuration': 2.0, // 2 seconds - เปลี่ยนเป็น double
-      'minWeight': 0.01, // minimum 0.01 kg
-      'maxWeight': 1000.0, // maximum 1000 kg
-      'precision': 2.0, // 2 decimal places - เปลี่ยนเป็น double
-      'autoTare': false,
-    },
-    WeightMode.animal: {
-      'stabilityThreshold': 0.2, // ± 0.2 kg (animals move)
-      'stabilityDuration': 5.0, // 5 seconds - เปลี่ยนเป็น double
-      'minWeight': 0.1, // minimum 0.1 kg
-      'maxWeight': 500.0, // maximum 500 kg
-      'precision': 1.0, // 1 decimal place - เปลี่ยนเป็น double
-      'autoTare': true,
-    },
-  };
+    // Setup pulse animation for stabilizing state
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Weight Display'),
-        backgroundColor: _selectedMode.color.withOpacity(0.1),
+        title: Row(
+          children: [
+            Icon(Icons.person, color: Colors.blue),
+            const SizedBox(width: 8),
+            Text('ชั่งน้ำหนักคน'),
+          ],
+        ),
+        backgroundColor: Colors.blue.withOpacity(0.1),
         actions: [
           IconButton(
             onPressed: _showSettingsDialog,
             icon: const Icon(Icons.tune),
-            tooltip: 'Mode Settings',
+            tooltip: 'ตั้งค่าการชั่ง',
           ),
           IconButton(
             onPressed: _showHistoryDialog,
             icon: const Icon(Icons.history),
-            tooltip: 'Weight History',
+            tooltip: 'ประวัติการชั่ง',
           ),
         ],
       ),
-      body: Consumer3<SettingProvider, CalibrationProvider, SaveHumanProvider>(
-        builder: (context, settingProvider, calibrationProvider, saveHumanProvider, child) {
+      body: Consumer4<SettingProvider, CalibrationProvider, SaveHumanProvider, WeightHumanProvider>(
+        builder: (context, settingProvider, calibrationProvider, saveHumanProvider, weightProvider, child) {
+          // Process weight readings
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            weightProvider.processFromProviders(settingProvider, calibrationProvider);
+          });
+
+          // Control pulse animation
+          if (weightProvider.isStabilizing) {
+            if (!_pulseController.isAnimating) {
+              _pulseController.repeat(reverse: true);
+            }
+          } else {
+            _pulseController.stop();
+            _pulseController.reset();
+          }
+
           return Column(
             children: [
-              _buildModeSelector(),
               _buildConnectionStatus(settingProvider, calibrationProvider),
               Expanded(
                 child: _buildWeightDisplay(
                   settingProvider,
                   calibrationProvider,
+                  weightProvider,
                 ),
               ),
-              _buildControlPanel(settingProvider, calibrationProvider),
+              _buildControlPanel(weightProvider),
             ],
           );
         },
@@ -100,83 +101,7 @@ class _DisplayPageState extends State<DisplayPage> {
     );
   }
 
-  Widget _buildModeSelector() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: _selectedMode.color.withOpacity(0.1),
-        border: Border(
-          bottom: BorderSide(color: _selectedMode.color.withOpacity(0.3)),
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'เลือกโหมดการชั่ง',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: _selectedMode.color[800],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children:
-                WeightMode.values.map((mode) {
-                  final isSelected = _selectedMode == mode;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => _changeMode(mode),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected ? mode.color : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: mode.color,
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              mode.icon,
-                              color: isSelected ? Colors.white : mode.color,
-                              size: 24,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              mode.displayName,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : mode.color,
-                                fontSize: 11,
-                                fontWeight:
-                                    isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConnectionStatus(
-    SettingProvider settingProvider,
-    CalibrationProvider calibrationProvider,
-  ) {
+  Widget _buildConnectionStatus(SettingProvider settingProvider, CalibrationProvider calibrationProvider) {
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -185,13 +110,8 @@ class _DisplayPageState extends State<DisplayPage> {
           children: [
             // Connection Status
             Icon(
-              settingProvider.connectedDevice != null
-                  ? Icons.bluetooth_connected
-                  : Icons.bluetooth_disabled,
-              color:
-                  settingProvider.connectedDevice != null
-                      ? Colors.green
-                      : Colors.red,
+              settingProvider.connectedDevice != null ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+              color: settingProvider.connectedDevice != null ? Colors.green : Colors.red,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -213,13 +133,8 @@ class _DisplayPageState extends State<DisplayPage> {
             // Calibration Status
             const SizedBox(width: 16),
             Icon(
-              calibrationProvider.isCalibrated
-                  ? Icons.check_circle
-                  : Icons.warning,
-              color:
-                  calibrationProvider.isCalibrated
-                      ? Colors.green
-                      : Colors.orange,
+              calibrationProvider.isCalibrated ? Icons.check_circle : Icons.warning,
+              color: calibrationProvider.isCalibrated ? Colors.green : Colors.orange,
             ),
             const SizedBox(width: 4),
             Text(
@@ -228,10 +143,7 @@ class _DisplayPageState extends State<DisplayPage> {
                   : 'Not Calibrated',
               style: TextStyle(
                 fontSize: 12,
-                color:
-                    calibrationProvider.isCalibrated
-                        ? Colors.green
-                        : Colors.orange,
+                color: calibrationProvider.isCalibrated ? Colors.green : Colors.orange,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -244,10 +156,11 @@ class _DisplayPageState extends State<DisplayPage> {
   Widget _buildWeightDisplay(
     SettingProvider settingProvider,
     CalibrationProvider calibrationProvider,
+    WeightHumanProvider weightProvider,
   ) {
-    // Get current raw value from BLE data
-    double? currentRawValue;
+    // Get current raw data for display
     String rawText = 'No Data';
+    double? currentRawValue;
     double? calibratedWeight;
 
     if (settingProvider.characteristicValues.isNotEmpty) {
@@ -256,19 +169,10 @@ class _DisplayPageState extends State<DisplayPage> {
         try {
           String receivedText = String.fromCharCodes(firstValue).trim();
           rawText = receivedText;
-          currentRawValue = _parseWeightFromText(receivedText);
+          currentRawValue = weightProvider.parseWeightFromText(receivedText);
 
           if (currentRawValue != null && calibrationProvider.isCalibrated) {
-            calibratedWeight = calibrationProvider.convertRawToWeight(
-              currentRawValue,
-            );
-            // ลบค่า Tare offset ออกจากน้ำหนักที่ปรับเทียบแล้ว
-            calibratedWeight = calibratedWeight - _tareOffset;
-            // ให้น้ำหนักเป็น 0 ถ้าน้อยกว่า 0
-            if (calibratedWeight < 0) {
-              calibratedWeight = 0.0;
-            }
-            _processWeightReading(calibratedWeight);
+            calibratedWeight = calibrationProvider.convertRawToWeight(currentRawValue);
           }
         } catch (e) {
           rawText = 'Parse Error';
@@ -276,132 +180,126 @@ class _DisplayPageState extends State<DisplayPage> {
       }
     }
 
-    final modeConfig = _modeSettings[_selectedMode]!;
-    final precision = (modeConfig['precision'] as double).toInt(); // แก้ไข casting
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           // Main Weight Display
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: _selectedMode.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _selectedMode.color.withOpacity(0.3),
-                width: 2,
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(_selectedMode.icon, size: 48, color: _selectedMode.color),
-                const SizedBox(height: 16),
-                Text(
-                  _selectedMode.displayName,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _selectedMode.color[800],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Weight Display
-                if (_stableWeight != null &&
-                    _isWeightValid(_stableWeight!)) ...[
-                  Text(
-                    '${_stableWeight!.toStringAsFixed(precision)} kg',
-                    style: TextStyle(
-                      fontSize: 64,
-                      fontWeight: FontWeight.bold,
-                      color: _selectedMode.color.shade700,
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: weightProvider.isStabilizing ? _pulseAnimation.value : 1.0,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: weightProvider.weightStatusColor.withOpacity(0.5),
+                      width: 2,
                     ),
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 16),
-                      const SizedBox(width: 4),
+                      Icon(Icons.person, size: 48, color: Colors.blue),
+                      const SizedBox(height: 16),
                       Text(
-                        'น้ำหนักเสถียร',
+                        'ชั่งน้ำหนักคน',
                         style: TextStyle(
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[800],
                         ),
                       ),
-                    ],
-                  ),
-                ] else if (calibratedWeight != null) ...[
-                  Text(
-                    '${calibratedWeight.toStringAsFixed(precision)} kg',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color:
-                          _isStabilizing
-                              ? Colors.orange
-                              : _selectedMode.color[700],
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (calibratedWeight != null) {
-                        await sendBLECommand(
-                          settingProvider,
-                          'CURRENT:${calibratedWeight!.toStringAsFixed(precision)}',
-                        );
-                      }
-                    },
-                    child: Text('ส่งน้ำหนักปัจจุบัน'),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (_isStabilizing) ...[
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.orange,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
+                      const SizedBox(height: 24),
+
+                      // Weight Display
+                      if (weightProvider.isReadyToSave && weightProvider.netWeight != null) ...[
                         Text(
-                          'กำลังวัด... (${_stabilityReadings.length}/${(modeConfig['stabilityDuration'] as double).toInt()}s)', // แก้ไข casting
+                          '${weightProvider.getFormattedWeight(weightProvider.netWeight!)} kg',
                           style: TextStyle(
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w500,
+                            fontSize: 64,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
                           ),
                         ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              weightProvider.weightStatusIcon,
+                              color: weightProvider.weightStatusColor,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              weightProvider.weightStatusText,
+                              style: TextStyle(
+                                color: weightProvider.weightStatusColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else if (calibratedWeight != null) ...[
+                        () {
+                          final netWeight = calibratedWeight! - weightProvider.tareOffset;
+                          final displayWeight = netWeight < 0 ? 0.0 : netWeight;
+                          
+                          return Column(
+                            children: [
+                              Text(
+                                '${weightProvider.getFormattedWeight(displayWeight)} kg',
+                                style: TextStyle(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: weightProvider.isStabilizing ? Colors.orange : Colors.blue[700],
+                                ),
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (weightProvider.isStabilizing) ...[
+                                    SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ] else ...[
+                                    Icon(weightProvider.weightStatusIcon, color: Colors.grey, size: 16),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Text(
+                                    weightProvider.weightStatusText,
+                                    style: TextStyle(
+                                      color: weightProvider.weightStatusColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        }(),
                       ] else ...[
-                        Icon(Icons.sync, color: Colors.grey, size: 16),
-                        const SizedBox(width: 4),
+                        Icon(Icons.scale, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
                         Text(
-                          'กำลังรอข้อมูล',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
+                          calibrationProvider.isCalibrated ? 'รอข้อมูลน้ำหนัก' : 'ยังไม่ได้ปรับเทียบ',
+                          style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                         ),
                       ],
                     ],
                   ),
-                ] else ...[
-                  Icon(Icons.scale, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    calibrationProvider.isCalibrated
-                        ? 'รอข้อมูลน้ำหนัก'
-                        : 'ยังไม่ได้ปรับเทียบ',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                  ),
-                ],
-              ],
-            ),
+                ),
+              );
+            },
           ),
 
           const SizedBox(height: 16),
@@ -443,21 +341,17 @@ class _DisplayPageState extends State<DisplayPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Raw Value: ${currentRawValue.toStringAsFixed(2)}',
-                            ),
-                            Text(
-                              'Calibrated: ${(calibratedWeight + _tareOffset).toStringAsFixed(precision)} kg',
-                            ),
+                            Text('Raw Value: ${currentRawValue.toStringAsFixed(2)}'),
+                            Text('Calibrated: ${weightProvider.getFormattedWeight(calibratedWeight)} kg'),
                           ],
                         ),
-                        if (_tareOffset != 0.0) ...[
+                        if (weightProvider.tareOffset != 0.0) ...[
                           const SizedBox(height: 4),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Tare Offset: ${_tareOffset.toStringAsFixed(precision)} kg',
+                                'Tare Offset: ${weightProvider.getFormattedWeight(weightProvider.tareOffset)} kg',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.blue[600],
@@ -465,7 +359,7 @@ class _DisplayPageState extends State<DisplayPage> {
                                 ),
                               ),
                               Text(
-                                'Net: ${calibratedWeight.toStringAsFixed(precision)} kg',
+                                'Net: ${weightProvider.getFormattedWeight(calibratedWeight - weightProvider.tareOffset < 0 ? 0.0 : calibratedWeight - weightProvider.tareOffset)} kg',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.green[600],
@@ -485,7 +379,7 @@ class _DisplayPageState extends State<DisplayPage> {
 
           const SizedBox(height: 16),
 
-          // Mode Information
+          // Human-specific Information
           Card(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -494,17 +388,13 @@ class _DisplayPageState extends State<DisplayPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        _selectedMode.icon,
-                        color: _selectedMode.color,
-                        size: 20,
-                      ),
+                      Icon(Icons.person, color: Colors.blue, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        'การตั้งค่า ${_selectedMode.displayName}',
+                        'การตั้งค่าสำหรับคน',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _selectedMode.color[700],
+                          color: Colors.blue[700],
                         ),
                       ),
                     ],
@@ -515,13 +405,13 @@ class _DisplayPageState extends State<DisplayPage> {
                       Expanded(
                         child: _buildInfoItem(
                           'ช่วงน้ำหนัก',
-                          '${modeConfig['minWeight']}-${modeConfig['maxWeight']} kg',
+                          '${weightProvider.humanSettings['minWeight']}-${weightProvider.humanSettings['maxWeight']} kg',
                         ),
                       ),
                       Expanded(
                         child: _buildInfoItem(
                           'ความแม่นยำ',
-                          '±${modeConfig['stabilityThreshold']} kg',
+                          '±${weightProvider.humanSettings['stabilityThreshold']} kg',
                         ),
                       ),
                     ],
@@ -532,20 +422,20 @@ class _DisplayPageState extends State<DisplayPage> {
                       Expanded(
                         child: _buildInfoItem(
                           'เวลาเสถียร',
-                          '${(modeConfig['stabilityDuration'] as double).toInt()} วินาที', // แก้ไข casting
+                          '${(weightProvider.humanSettings['stabilityDuration'] as double).toInt()} วินาที',
                         ),
                       ),
                       Expanded(
                         child: _buildInfoItem(
                           'ทศนิยม',
-                          '${(modeConfig['precision'] as double).toInt()} ตำแหน่ง', // แก้ไข casting
+                          '${weightProvider.precision} ตำแหน่ง',
                         ),
                       ),
-                      if (_tareOffset != 0.0)
+                      if (weightProvider.tareOffset != 0.0)
                         Expanded(
                           child: _buildInfoItem(
                             'Tare Offset',
-                            '${_tareOffset.toStringAsFixed(2)} kg',
+                            '${weightProvider.getFormattedWeight(weightProvider.tareOffset)} kg',
                             color: Colors.orange[700],
                           ),
                         ),
@@ -580,10 +470,7 @@ class _DisplayPageState extends State<DisplayPage> {
     );
   }
 
-  Widget _buildControlPanel(
-    SettingProvider settingProvider,
-    CalibrationProvider calibrationProvider,
-  ) {
+  Widget _buildControlPanel(WeightHumanProvider weightProvider) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -608,7 +495,7 @@ class _DisplayPageState extends State<DisplayPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _stableWeight != null ? _saveWeight : null,
+                  onPressed: weightProvider.isReadyToSave ? _saveWeight : null,
                   icon: const Icon(Icons.save),
                   label: const Text('บันทึก'),
                   style: ElevatedButton.styleFrom(
@@ -652,153 +539,33 @@ class _DisplayPageState extends State<DisplayPage> {
     );
   }
 
-  // Helper methods
-  double? _parseWeightFromText(String text) {
-    try {
-      RegExp weightPattern = RegExp(
-        r'Weight:\s*([+-]?\d+\.?\d*)',
-        caseSensitive: false,
-      );
-      Match? match = weightPattern.firstMatch(text);
-
-      if (match != null) {
-        return double.tryParse(match.group(1)!);
-      }
-
-      RegExp numberPattern = RegExp(r'([+-]?\d+\.?\d*)');
-      match = numberPattern.firstMatch(text);
-
-      if (match != null) {
-        return double.tryParse(match.group(1)!);
-      }
-
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  void _changeMode(WeightMode mode) {
-    setState(() {
-      _selectedMode = mode;
-      _isStabilizing = false;
-      _stabilityReadings.clear();
-      _stableWeight = null;
-      // อาจจะเคลียร์ tare เมื่อเปลี่ยนโหมด (ตามการตั้งค่า)
-      if (_modeSettings[mode]!['autoTare'] == true) {
-        _tareOffset = 0.0;
-        _tareTimestamp = null;
-      }
-    });
-  }
-
-  void _processWeightReading(double weight) {
-    final modeConfig = _modeSettings[_selectedMode]!;
-    final threshold = modeConfig['stabilityThreshold'] as double;
-    final duration = (modeConfig['stabilityDuration'] as double).toInt(); // แก้ไข casting
-
-    final now = DateTime.now();
-
-    // Check if weight is within valid range
-    if (!_isWeightValid(weight)) {
-      setState(() {
-        _isStabilizing = false;
-        _stabilityReadings.clear();
-        _stableWeight = null;
-      });
-      return;
-    }
-
-    // Add reading to stability buffer
-    _stabilityReadings.add(weight);
-
-    // Keep only recent readings (within duration)
-    if (_stabilityReadings.length > duration) {
-      _stabilityReadings.removeAt(0);
-    }
-
-    // Check if we have enough stable readings
-    if (_stabilityReadings.length >= duration) {
-      double minWeight = _stabilityReadings.reduce((a, b) => a < b ? a : b);
-      double maxWeight = _stabilityReadings.reduce((a, b) => a > b ? a : b);
-
-      if ((maxWeight - minWeight) <= threshold) {
-        // Weight is stable
-        double avgWeight =
-            _stabilityReadings.reduce((a, b) => a + b) /
-            _stabilityReadings.length;
-        setState(() {
-          _stableWeight = avgWeight;
-          _isStabilizing = false;
-        });
-      } else {
-        // Weight is still fluctuating
-        setState(() {
-          _isStabilizing = true;
-          _stableWeight = null;
-        });
-      }
-    } else {
-      // Not enough readings yet
-      setState(() {
-        _isStabilizing = true;
-        _stableWeight = null;
-      });
-    }
-
-    _lastReadingTime = now;
-  }
-
-  bool _isWeightValid(double weight) {
-    final modeConfig = _modeSettings[_selectedMode]!;
-    final minWeight = modeConfig['minWeight'] as double;
-    final maxWeight = modeConfig['maxWeight'] as double;
-
-    return weight >= minWeight && weight <= maxWeight;
-  }
-
   void _tareWeight() {
-    final settingProvider = Provider.of<SettingProvider>(
-      context,
-      listen: false,
-    );
-    final calibrationProvider = Provider.of<CalibrationProvider>(
-      context,
-      listen: false,
-    );
+    final settingProvider = Provider.of<SettingProvider>(context, listen: false);
+    final calibrationProvider = Provider.of<CalibrationProvider>(context, listen: false);
+    final weightProvider = Provider.of<WeightHumanProvider>(context, listen: false);
 
     // Get current weight to use as tare offset
-    if (settingProvider.characteristicValues.isNotEmpty &&
-        calibrationProvider.isCalibrated) {
+    if (settingProvider.characteristicValues.isNotEmpty && calibrationProvider.isCalibrated) {
       final firstValue = settingProvider.characteristicValues.values.first;
       if (firstValue is List<int> && firstValue.isNotEmpty) {
         try {
           String receivedText = String.fromCharCodes(firstValue).trim();
-          double? currentRawValue = _parseWeightFromText(receivedText);
+          double? currentRawValue = weightProvider.parseWeightFromText(receivedText);
 
           if (currentRawValue != null) {
-            double currentCalibratedWeight = calibrationProvider
-                .convertRawToWeight(currentRawValue);
-
-            // Set the current calibrated weight as the new tare offset
-            setState(() {
-              _tareOffset = currentCalibratedWeight;
-              _tareTimestamp = DateTime.now();
-              _isStabilizing = false;
-              _stabilityReadings.clear();
-              _stableWeight = null;
-            });
+            double currentCalibratedWeight = calibrationProvider.convertRawToWeight(currentRawValue);
+            weightProvider.setTareOffset(currentCalibratedWeight);
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Tare ตั้งค่าที่ ${_tareOffset.toStringAsFixed(2)} kg (${_selectedMode.displayName})',
+                  'Tare ตั้งค่าที่ ${weightProvider.getFormattedWeight(currentCalibratedWeight)} kg',
                 ),
-                backgroundColor: _selectedMode.color,
+                backgroundColor: Colors.blue,
                 action: SnackBarAction(
                   label: 'Clear Tare',
                   textColor: Colors.white,
-                  onPressed: _clearTare,
+                  onPressed: () => weightProvider.clearTare(),
                 ),
               ),
             );
@@ -810,13 +577,6 @@ class _DisplayPageState extends State<DisplayPage> {
       }
     }
 
-    // If no valid weight data, just reset display
-    setState(() {
-      _isStabilizing = false;
-      _stabilityReadings.clear();
-      _stableWeight = null;
-    });
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('ไม่สามารถตั้งค่า Tare ได้ - ไม่มีข้อมูลน้ำหนัก'),
@@ -825,85 +585,88 @@ class _DisplayPageState extends State<DisplayPage> {
     );
   }
 
-  void _clearTare() {
-    setState(() {
-      _tareOffset = 0.0;
-      _tareTimestamp = null;
-      _isStabilizing = false;
-      _stabilityReadings.clear();
-      _stableWeight = null;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('ล้างค่า Tare แล้ว'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
   void _saveWeight() async {
-    if (_stableWeight == null) return;
+    final weightProvider = Provider.of<WeightHumanProvider>(context, listen: false);
+    
+    if (!weightProvider.isReadyToSave || weightProvider.netWeight == null) return;
 
-    final precision = ((_modeSettings[_selectedMode]!['precision'] as double).toInt()); // แก้ไข casting
     final TextEditingController nameController = TextEditingController();
+    final TextEditingController notesController = TextEditingController();
 
-    // Show dialog to input person name
+    // Show dialog to input person data
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            Icon(_selectedMode.icon, color: _selectedMode.color),
+            Icon(Icons.person, color: Colors.blue),
             const SizedBox(width: 8),
-            Text('บันทึกน้ำหนัก'),
+            Text('บันทึกน้ำหนักคน'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'น้ำหนักที่วัดได้: ${_stableWeight!.toStringAsFixed(precision)} kg',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: _selectedMode.color[700],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'โหมด: ${_selectedMode.displayName}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-            if (_tareOffset != 0.0) ...[
-              const SizedBox(height: 8),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                'Tare Offset: ${_tareOffset.toStringAsFixed(precision)} kg',
+                'น้ำหนักที่วัดได้: ${weightProvider.getFormattedWeight(weightProvider.netWeight!)} kg',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.blue[600],
-                  fontStyle: FontStyle.italic,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue[700],
                 ),
               ),
-            ],
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: 'ชื่อคน',
-                hintText: 'กรุณากรอกชื่อคนที่ชั่งน้ำหนัก',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
+              const SizedBox(height: 16),
+              Text(
+                'โหมด: ชั่งน้ำหนักคน',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
               ),
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-            ),
-          ],
+              if (weightProvider.tareOffset != 0.0) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Tare Offset: ${weightProvider.getFormattedWeight(weightProvider.tareOffset)} kg',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              
+              // ช่องกรอกชื่อคน
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'ชื่อคน',
+                  hintText: 'กรุณากรอกชื่อคนที่ชั่งน้ำหนัก',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+              ),
+              
+              // ช่องกรอกหมายเหตุ
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                decoration: InputDecoration(
+                  labelText: 'หมายเหตุ (ไม่บังคับ)',
+                  hintText: 'เพิ่มหมายเหตุเพิ่มเติม...',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.note),
+                ),
+                maxLines: 2,
+                textCapitalization: TextCapitalization.sentences,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -924,7 +687,7 @@ class _DisplayPageState extends State<DisplayPage> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: _selectedMode.color,
+              backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
             ),
             child: const Text('บันทึก'),
@@ -934,16 +697,11 @@ class _DisplayPageState extends State<DisplayPage> {
     );
 
     if (result == true && nameController.text.trim().isNotEmpty) {
-      // ตรวจสอบว่ามี SaveHumanProvider หรือไม่
       try {
-        final saveHumanProvider = Provider.of<SaveHumanProvider>(
+        final success = await weightProvider.saveWeight(
           context,
-          listen: false,
-        );
-
-        final success = await saveHumanProvider.saveWeight(
-          personName: nameController.text.trim(),
-          weight: _stableWeight!,
+          nameController.text.trim(),
+          notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
         );
 
         if (success) {
@@ -954,18 +712,13 @@ class _DisplayPageState extends State<DisplayPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'บันทึกน้ำหนักสำเร็จ!',
+                    'บันทึกน้ำหนักคนสำเร็จ!',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    'ชื่อ: ${nameController.text.trim()}',
-                  ),
-                  Text(
-                    'น้ำหนัก: ${_stableWeight!.toStringAsFixed(precision)} kg',
-                  ),
-                  Text(
-                    'โหมด: ${_selectedMode.displayName}',
-                  ),
+                  Text('ชื่อ: ${nameController.text.trim()}'),
+                  Text('น้ำหนัก: ${weightProvider.getFormattedWeight(weightProvider.netWeight!)} kg'),
+                  if (notesController.text.trim().isNotEmpty)
+                    Text('หมายเหตุ: ${notesController.text.trim()}'),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -977,13 +730,6 @@ class _DisplayPageState extends State<DisplayPage> {
               ),
             ),
           );
-
-          // Reset the stable weight after successful save
-          setState(() {
-            _stableWeight = null;
-            _isStabilizing = false;
-            _stabilityReadings.clear();
-          });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -993,7 +739,6 @@ class _DisplayPageState extends State<DisplayPage> {
           );
         }
       } catch (e) {
-        // Provider not found error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('ไม่พบ SaveHumanProvider - กรุณาตรวจสอบการตั้งค่า'),
@@ -1005,13 +750,16 @@ class _DisplayPageState extends State<DisplayPage> {
     }
 
     nameController.dispose();
+    notesController.dispose();
   }
 
   void _showSettingsDialog() {
+    final weightProvider = Provider.of<WeightHumanProvider>(context, listen: false);
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('การตั้งค่า ${_selectedMode.displayName}'),
+        title: Text('การตั้งค่าการชั่งน้ำหนักคน'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1022,6 +770,7 @@ class _DisplayPageState extends State<DisplayPage> {
                 0.01,
                 1.0,
                 2,
+                weightProvider,
               ),
               _buildSettingSlider(
                 'เวลาเสถียร (วินาที)',
@@ -1029,21 +778,33 @@ class _DisplayPageState extends State<DisplayPage> {
                 1.0,
                 10.0,
                 0,
+                weightProvider,
                 isInt: true,
               ),
               _buildSettingSlider(
                 'น้ำหนักต่ำสุด (kg)',
                 'minWeight',
-                0.01,
-                100.0,
-                2,
+                1.0,
+                50.0,
+                1,
+                weightProvider,
               ),
               _buildSettingSlider(
                 'น้ำหนักสูงสุด (kg)',
                 'maxWeight',
-                10.0,
-                2000.0,
+                100.0,
+                500.0,
                 0,
+                weightProvider,
+              ),
+              _buildSettingSlider(
+                'ทศนิยม (ตำแหน่ง)',
+                'precision',
+                0.0,
+                3.0,
+                0,
+                weightProvider,
+                isInt: true,
               ),
             ],
           ),
@@ -1063,10 +824,11 @@ class _DisplayPageState extends State<DisplayPage> {
     String key,
     double min,
     double max,
-    int decimals, {
+    int decimals,
+    WeightHumanProvider weightProvider, {
     bool isInt = false,
   }) {
-    final currentValue = _modeSettings[_selectedMode]![key] as double;
+    final currentValue = weightProvider.humanSettings[key] as double;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1077,15 +839,9 @@ class _DisplayPageState extends State<DisplayPage> {
           min: min,
           max: max,
           divisions: isInt ? (max - min).toInt() : null,
-          label:
-              isInt
-                  ? currentValue.toInt().toString()
-                  : currentValue.toStringAsFixed(decimals),
+          label: isInt ? currentValue.toInt().toString() : currentValue.toStringAsFixed(decimals),
           onChanged: (value) {
-            setState(() {
-              _modeSettings[_selectedMode]![key] =
-                  isInt ? value.round().toDouble() : value;
-            });
+            weightProvider.updateSetting(key, isInt ? value.round().toDouble() : value);
           },
         ),
         const SizedBox(height: 8),
@@ -1094,12 +850,8 @@ class _DisplayPageState extends State<DisplayPage> {
   }
 
   void _showHistoryDialog() {
-    // ตรวจสอบว่ามี SaveHumanProvider หรือไม่ก่อนเปิด dialog
     try {
-      final saveHumanProvider = Provider.of<SaveHumanProvider>(
-        context,
-        listen: false,
-      );
+      final saveHumanProvider = Provider.of<SaveHumanProvider>(context, listen: false);
       
       showDialog(
         context: context,
@@ -1111,9 +863,9 @@ class _DisplayPageState extends State<DisplayPage> {
             return AlertDialog(
               title: Row(
                 children: [
-                  Icon(Icons.history, color: _selectedMode.color),
+                  Icon(Icons.history, color: Colors.blue),
                   const SizedBox(width: 8),
-                  Text('ประวัติการชั่ง'),
+                  Text('ประวัติการชั่งน้ำหนักคน'),
                 ],
               ),
               content: Container(
@@ -1124,16 +876,16 @@ class _DisplayPageState extends State<DisplayPage> {
                     // Statistics Card
                     if (savedWeights.isNotEmpty) ...[
                       Card(
-                        color: _selectedMode.color.withOpacity(0.1),
+                        color: Colors.blue.withOpacity(0.1),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             children: [
                               Text(
-                                'สถิติการชั่ง',
+                                'สถิติการชั่งน้ำหนักคน',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: _selectedMode.color[700],
+                                  color: Colors.blue[700],
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -1184,18 +936,11 @@ class _DisplayPageState extends State<DisplayPage> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    Icons.scale,
-                                    size: 64,
-                                    color: Colors.grey[400],
-                                  ),
+                                  Icon(Icons.person, size: 64, color: Colors.grey[400]),
                                   const SizedBox(height: 16),
                                   Text(
-                                    'ยังไม่มีประวัติการชั่ง',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey[600],
-                                    ),
+                                    'ยังไม่มีประวัติการชั่งน้ำหนักคน',
+                                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                                   ),
                                 ],
                               ),
@@ -1210,22 +955,35 @@ class _DisplayPageState extends State<DisplayPage> {
                                   margin: const EdgeInsets.symmetric(vertical: 2),
                                   child: ListTile(
                                     leading: CircleAvatar(
-                                      backgroundColor: _selectedMode.color.withOpacity(0.2),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: _selectedMode.color[700],
-                                      ),
+                                      backgroundColor: Colors.blue.withOpacity(0.2),
+                                      child: Icon(Icons.person, color: Colors.blue[700]),
                                     ),
                                     title: Text(
                                       weight.personName,
                                       style: TextStyle(fontWeight: FontWeight.bold),
                                     ),
-                                    subtitle: Text(
-                                      '${date.day}/${date.month}/${date.year} '
-                                      '${date.hour.toString().padLeft(2, '0')}:'
-                                      '${date.minute.toString().padLeft(2, '0')}:'
-                                      '${date.second.toString().padLeft(2, '0')}',
-                                      style: TextStyle(fontSize: 12),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${date.day}/${date.month}/${date.year} '
+                                          '${date.hour.toString().padLeft(2, '0')}:'
+                                          '${date.minute.toString().padLeft(2, '0')}:'
+                                          '${date.second.toString().padLeft(2, '0')}',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                        if (weight.notes != null && weight.notes!.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'หมายเหตุ: ${weight.notes}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontStyle: FontStyle.italic,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                     trailing: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1236,7 +994,7 @@ class _DisplayPageState extends State<DisplayPage> {
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
-                                            color: _selectedMode.color[700],
+                                            color: Colors.blue[700],
                                           ),
                                         ),
                                         PopupMenuButton<String>(
@@ -1344,7 +1102,6 @@ class _DisplayPageState extends State<DisplayPage> {
                   TextButton(
                     onPressed: () {
                       final csvData = saveHumanProvider.exportToCSV();
-                      // TODO: Implement file export functionality
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('ส่งออกข้อมูล CSV (${savedWeights.length} รายการ)'),
@@ -1365,7 +1122,6 @@ class _DisplayPageState extends State<DisplayPage> {
         ),
       );
     } catch (e) {
-      // Provider not found error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('ไม่พบ SaveHumanProvider - กรุณาตรวจสอบการตั้งค่าใน main.dart'),
@@ -1384,7 +1140,7 @@ class _DisplayPageState extends State<DisplayPage> {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: _selectedMode.color[700],
+            color: Colors.blue[700],
           ),
         ),
         Text(
@@ -1396,25 +1152,5 @@ class _DisplayPageState extends State<DisplayPage> {
         ),
       ],
     );
-  }
-}
-
-// ฟังก์ชันส่งคำสั่งไป ESP32
-Future<void> sendBLECommand(
-  SettingProvider settingProvider,
-  String command,
-) async {
-  if (settingProvider.connectedDevice != null &&
-      settingProvider.characteristics.isNotEmpty) {
-    for (var characteristicList in settingProvider.characteristics.values) {
-      for (var char in characteristicList) {
-        if (char.properties.write || char.properties.writeWithoutResponse) {
-          if (char.uuid.toString().toLowerCase().contains('abcdef01')) {
-            await settingProvider.writeCharacteristic(char, command.codeUnits);
-            return;
-          }
-        }
-      }
-    }
   }
 }

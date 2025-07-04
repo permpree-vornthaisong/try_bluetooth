@@ -3,7 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:try_bluetooth/pages/CalibrationZeroPage.dart';
 import 'package:try_bluetooth/pages/SettingsPage.dart';
 import 'package:try_bluetooth/pages/DisplayPage.dart';
+import 'package:try_bluetooth/pages/UserListPage.dart';
+import 'package:try_bluetooth/pages/WeightHumanPage.dart';
+import 'package:try_bluetooth/providers/CRUDSQLiteProvider.dart' show CRUDSQLiteProvider;
+import 'package:try_bluetooth/providers/SaveAnimalProvider.dart';
 import 'package:try_bluetooth/providers/SaveHumanProvider.dart';
+import 'package:try_bluetooth/providers/SaveObjectProvider.dart';
+import 'package:try_bluetooth/providers/WeightHumanProvider.dart';
 import 'package:try_bluetooth/widgets/CalibrationWidget.dart';
 import 'package:try_bluetooth/widgets/FactoryCalibrationWidget.dart';
 import 'package:try_bluetooth/providers/NavigationBar1Provider.dart';
@@ -11,47 +17,81 @@ import 'package:try_bluetooth/providers/SettingProvider.dart';
 import 'package:try_bluetooth/providers/DisplayProvider.dart';
 import 'package:try_bluetooth/providers/CalibrationProvider.dart';
 import 'package:try_bluetooth/providers/FactoryCalibrationProvider.dart';
-import 'package:try_bluetooth/providers/calibration_easy_provider.dart'; // ✅ เพิ่มนี้
-// import 'package:try_bluetooth/providers/DeviceConnectionProvider.dart'; // ✅ ถ้ามี
+import 'package:try_bluetooth/providers/calibration_easy_provider.dart';
 
-/// Flutter code sample for [NavigationBar] using Provider pattern.
-
-void main() => runApp(const MyApp());
+void main() async {
+  // ✅ เพิ่มการเตรียมใช้งาน async
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'BLE Navigation App',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: MultiProvider(
-        providers: [
-          // ✅ 1. Navigation Provider
-          ChangeNotifierProvider(create: (context) => NavigationBar1Provider()),
+    return MultiProvider(
+      providers: [
+        // ✅ 1. Navigation Provider
+        ChangeNotifierProvider(create: (context) => NavigationBar1Provider()),
 
-          // ✅ 2. BLE & Connection Providers
-          ChangeNotifierProvider(create: (context) => SettingProvider()),
-          // ChangeNotifierProvider(create: (context) => DeviceConnectionProvider()), // ถ้ามี
+        // ✅ 2. BLE & Connection Providers
+        ChangeNotifierProvider(create: (context) => SettingProvider()),
 
-          // ✅ 3. Display Provider
-          ChangeNotifierProvider(create: (context) => DisplayProvider()),
+        // ✅ 3. Display Provider
+        ChangeNotifierProvider(create: (context) => DisplayProvider()),
 
-          // ✅ 4. Calibration Providers
-          ChangeNotifierProvider(create: (context) => CalibrationProvider()),
-          ChangeNotifierProvider(
-            create: (context) => FactoryCalibrationProvider(),
-          ),
-          ChangeNotifierProvider(
-            create: (context) => CalibrationEasy(),
-          ), // ✅ เพิ่มนี้
-          // ✅ 5. เพิ่ม Providers อื่นๆ ที่อาจมี
-          // ChangeNotifierProvider(create: (context) => ThemeProvider()),
-          // ChangeNotifierProvider(create: (context) => UserPreferencesProvider()),
-           ChangeNotifierProvider(create: (_) => SaveHumanProvider()..initDatabase()),
-        ],
-        child: const NavigationExample(),
+        // ✅ 4. Calibration Providers
+        ChangeNotifierProvider(create: (context) => CalibrationProvider()),
+        ChangeNotifierProvider(create: (context) => FactoryCalibrationProvider()),
+        ChangeNotifierProvider(create: (context) => CalibrationEasy()),
+
+        // ✅ 5. Database Providers - เรียก initDatabase() เฉพาะที่นี่
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = SaveHumanProvider();
+            provider.initDatabase(); // Initialize ครั้งเดียวที่นี่
+            return provider;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = SaveObjectProvider();
+            provider.initDatabase();
+            return provider;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = SaveAnimalProvider();
+            provider.initDatabase();
+            return provider;
+          },
+        ),
+        
+        // ✅ 6. Weight Providers
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = WeightHumanProvider();
+            provider.initialize();
+            return provider;
+          },
+        ),
+        
+        // ✅ 7. CRUD Provider - เพิ่ม initialization
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = CRUDSQLiteProvider();
+            provider.initDatabase('app_database'); // Initialize database
+            return provider;
+          },
+        ),
+      ],
+      child: MaterialApp(
+        title: 'BLE Navigation App',
+        theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+        home: const NavigationExample(),
       ),
     );
   }
@@ -75,24 +115,26 @@ class _NavigationExampleState extends State<NavigationExample> {
     });
   }
 
-  // ✅ เชื่อมต่อ providers กันหลังจาก build แล้ว
+  // ✅ เชื่อมต่อ providers กันหลังจาก build แล้ว (ไม่เรียก initDatabase ซ้ำ)
   void _initializeProviders() {
-    final settingProvider = Provider.of<SettingProvider>(
-      context,
-      listen: false,
-    );
-    final calibrationEasy = Provider.of<CalibrationEasy>(
-      context,
-      listen: false,
-    );
+    try {
+      final settingProvider = Provider.of<SettingProvider>(context, listen: false);
+      final calibrationEasy = Provider.of<CalibrationEasy>(context, listen: false);
+      final saveHumanProvider = Provider.of<SaveHumanProvider>(context, listen: false);
 
-    // เชื่อมต่อ CalibrationEasy กับ SettingProvider
-    calibrationEasy.connectToSettingProvider(settingProvider);
+      // เชื่อมต่อ CalibrationEasy กับ SettingProvider
+      calibrationEasy.connectToSettingProvider(settingProvider);
 
-    // Initialize CalibrationEasy database
-    calibrationEasy.initialize();
+      // Initialize CalibrationEasy (ไม่ใช่ database)
+      calibrationEasy.initialize();
 
-    print('All providers initialized and connected');
+      // ✅ ไม่ต้องเรียก initDatabase() ซ้ำที่นี่ เพราะเรียกไปแล้วใน MultiProvider
+
+      print('✅ All providers initialized and connected successfully');
+      print('✅ SaveHumanProvider records: ${saveHumanProvider.savedWeights.length}');
+    } catch (e) {
+      print('❌ Error initializing providers: $e');
+    }
   }
 
   @override
@@ -146,14 +188,10 @@ class _NavigationExampleState extends State<NavigationExample> {
     );
   }
 
-  Widget _buildCurrentPage(
-    BuildContext context,
-    ThemeData theme,
-    int currentPageIndex,
-  ) {
+  Widget _buildCurrentPage(BuildContext context, ThemeData theme, int currentPageIndex) {
     switch (currentPageIndex) {
       case 0:
-        return const DisplayPage(); // BLE Data Display page
+        return UserListPage(); // BLE Data Display page
       case 1:
         return const CalibrationWidget(); // Weight Calibration page
       case 2:
@@ -167,248 +205,201 @@ class _NavigationExampleState extends State<NavigationExample> {
     }
   }
 
-  Widget _buildHomePage(ThemeData theme) {
-    return Card(
-      shadowColor: Colors.transparent,
-      margin: const EdgeInsets.all(8.0),
-      child: SizedBox.expand(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.bluetooth, size: 64, color: theme.colorScheme.primary),
-              const SizedBox(height: 16),
-              Text('BLE Navigation App', style: theme.textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Navigate to Settings to manage BLE connections',
-                style: theme.textTheme.bodyLarge,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildNotificationsPage() {
-    return Consumer3<SettingProvider, CalibrationEasy, CalibrationProvider>(
-      builder: (
-        context,
-        settingProvider,
-        calibrationEasy,
-        calibrationProvider,
-        child,
-      ) {
+    return Consumer4<SettingProvider, CalibrationEasy, CalibrationProvider, SaveHumanProvider>(
+      builder: (context, settingProvider, calibrationEasy, calibrationProvider, saveHumanProvider, child) {
         return SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: <Widget>[
-                // ✅ 1. Bluetooth Status Card
+                // ✅ Database Status Card
                 Card(
                   child: ListTile(
                     leading: Icon(
-                      Icons.bluetooth,
-                      color:
-                          settingProvider.isBluetoothOn
-                              ? Colors.blue
-                              : Colors.grey,
+                      saveHumanProvider.savedWeights.isNotEmpty ? Icons.storage : Icons.storage_outlined,
+                      color: Colors.purple,
                     ),
-                    title: const Text('Bluetooth Status'),
+                    title: const Text('Database Status'),
                     subtitle: Text(
-                      settingProvider.isBluetoothOn
-                          ? 'Bluetooth is ON'
-                          : 'Bluetooth is OFF',
+                      'Saved Records: ${saveHumanProvider.savedWeights.length}\n'
+                      'Loading: ${saveHumanProvider.isLoading ? 'Yes' : 'No'}',
                     ),
+                    trailing: saveHumanProvider.isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check_circle, color: Colors.green),
                   ),
                 ),
 
-                // ✅ 2. BLE Connection Card
+                // ✅ Test Save Button
                 Card(
+                  color: Colors.blue.shade50,
                   child: ListTile(
-                    leading: Icon(
-                      settingProvider.connectedDevice != null
-                          ? Icons.bluetooth_connected
-                          : Icons.bluetooth_disabled,
-                      color:
-                          settingProvider.connectedDevice != null
-                              ? Colors.green
-                              : Colors.grey,
+                    leading: const Icon(Icons.add_circle, color: Colors.blue),
+                    title: const Text('Test Database'),
+                    subtitle: const Text('Add a test record to verify database is working'),
+                    trailing: ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          final success = await saveHumanProvider.saveWeight(
+                            personName: 'Test User ${DateTime.now().millisecondsSinceEpoch}',
+                            weight: 70.0,
+                            notes: 'Test record created at ${DateTime.now()}',
+                          );
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(success ? 'Test record saved!' : 'Failed to save test record'),
+                              backgroundColor: success ? Colors.green : Colors.red,
+                            ),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Test Save'),
                     ),
-                    title: const Text('BLE Connection'),
-                    subtitle: Text(settingProvider.connectionStatus),
                   ),
                 ),
 
-                // ✅ 3. Raw Value Card (แสดง raw value ปัจจุบัน)
-                if (settingProvider.connectedDevice != null)
+                // ✅ Database Statistics
+                if (saveHumanProvider.savedWeights.isNotEmpty)
                   Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.sensors, color: Colors.purple),
-                      title: const Text('Raw Value'),
-                      subtitle: Text(
-                        settingProvider.currentRawValue != null
-                            ? 'Current: ${settingProvider.currentRawValue!.toStringAsFixed(6)}'
-                            : 'No data received',
-                      ),
-                      trailing:
-                          settingProvider.currentRawValue != null
-                              ? const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              )
-                              : const Icon(Icons.error, color: Colors.red),
-                    ),
-                  ),
-
-                // ✅ 4. Calibration Status Card
-                Card(
-                  child: ListTile(
-                    leading: Icon(
-                      calibrationEasy.isCalibrated
-                          ? Icons.done_all
-                          : Icons.warning,
-                      color:
-                          calibrationEasy.isCalibrated
-                              ? Colors.green
-                              : Colors.orange,
-                    ),
-                    title: const Text('Calibration Status'),
-                    subtitle: Text(calibrationEasy.statusMessage),
-                    trailing:
-                        calibrationEasy.isCollecting
-                            ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : null,
-                  ),
-                ),
-
-                // ✅ 5. Connected Device Info
-                if (settingProvider.connectedDevice != null)
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.info, color: Colors.blue),
-                      title: Text(
-                        'Connected to: ${settingProvider.getBLEDeviceDisplayName(settingProvider.connectedDevice!)}',
-                      ),
-                      subtitle: Column(
+                    color: Colors.indigo.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'RSSI: ${settingProvider.rssi ?? 'Unknown'} dBm',
+                          Row(
+                            children: [
+                              Icon(Icons.analytics, color: Colors.indigo),
+                              SizedBox(width: 8),
+                              Text(
+                                'Database Statistics',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.indigo[800],
+                                ),
+                              ),
+                            ],
                           ),
-                          Text('Services: ${settingProvider.services.length}'),
-                          Text('Raw Text: "${settingProvider.lastRawText}"'),
+                          const SizedBox(height: 12),
+                          Builder(
+                            builder: (context) {
+                              final stats = saveHumanProvider.getStatistics();
+                              return Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildStatItem(
+                                          'Total Records',
+                                          '${stats['totalRecords']}',
+                                          Icons.receipt_long,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: _buildStatItem(
+                                          'Unique People',
+                                          '${stats['uniquePeople']}',
+                                          Icons.people,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildStatItem(
+                                          'Average Weight',
+                                          '${(stats['averageWeight'] as double).toStringAsFixed(1)} kg',
+                                          Icons.balance,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: _buildStatItem(
+                                          'Weight Range',
+                                          '${(stats['minWeight'] as double).toStringAsFixed(1)}-${(stats['maxWeight'] as double).toStringAsFixed(1)} kg',
+                                          Icons.straighten,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),
                   ),
 
-                // ✅ 6. Available Devices
-                if (settingProvider.bleDevices.isNotEmpty)
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.devices_other,
-                        color: Colors.orange,
-                      ),
-                      title: const Text('Available BLE Devices'),
-                      subtitle: Text(
-                        '${settingProvider.bleDevices.length} devices found',
-                      ),
-                    ),
-                  ),
-
-                // ✅ 7. Quick Actions
+                // ✅ Quick Actions
                 Card(
                   child: Column(
                     children: [
                       ListTile(
-                        leading: const Icon(
-                          Icons.display_settings,
-                          color: Colors.purple,
-                        ),
-                        title: const Text('ASCII Data Display'),
-                        subtitle: const Text(
-                          'View real-time data from BLE device',
-                        ),
+                        leading: const Icon(Icons.person, color: Colors.blue),
+                        title: const Text('Weight Human Page'),
+                        subtitle: const Text('Test the WeightHumanPage'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          Provider.of<NavigationBar1Provider>(
+                          Navigator.push(
                             context,
-                            listen: false,
-                          ).setCurrentPageIndex(0);
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.tune, color: Colors.green),
-                        title: const Text('Calibration'),
-                        subtitle: const Text('Set zero and reference weight'),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () {
-                          Provider.of<NavigationBar1Provider>(
-                            context,
-                            listen: false,
-                          ).setCurrentPageIndex(1);
+                            MaterialPageRoute(builder: (context) => const WeightHumanPage()),
+                          );
                         },
                       ),
                     ],
                   ),
                 ),
-
-                // ✅ 8. Provider Connection Status (Debug Info)
-                if (settingProvider.connectedDevice != null)
-                  Card(
-                    color: Colors.grey.shade50,
-                    child: ExpansionTile(
-                      leading: const Icon(
-                        Icons.developer_mode,
-                        color: Colors.grey,
-                      ),
-                      title: const Text('Debug Information'),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'CalibrationEasy Connected: ${calibrationEasy.toString().contains('CalibrationEasy') ? 'Yes' : 'No'}',
-                              ),
-                              Text(
-                                'Target Readings: ${calibrationEasy.targetReadings}',
-                              ),
-                              Text(
-                                'Is Collecting: ${calibrationEasy.isCollecting}',
-                              ),
-                              Text(
-                                'Collection Progress: ${(calibrationEasy.collectionProgress * 100).toStringAsFixed(1)}%',
-                              ),
-                              if (calibrationEasy.zeroPoint != null)
-                                Text(
-                                  'Zero Point: ${calibrationEasy.zeroPoint!.toStringAsFixed(6)}',
-                                ),
-                              if (calibrationEasy.referencePoint != null)
-                                Text(
-                                  'Reference Point: ${calibrationEasy.referencePoint!.toStringAsFixed(6)} (${calibrationEasy.referenceWeight} kg)',
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.indigo.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.indigo[600], size: 20),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.indigo[800],
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

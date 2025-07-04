@@ -3,16 +3,18 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:uuid/uuid.dart';
 
-class SavedHumanWeight {
+class SavedAnimalWeight {
   final String id;
-  final String personName;
+  final String animalName;
+  final String animalType; // เพิ่มประเภทสัตว์
   final double weight;
   final DateTime timestamp;
   final String? notes; // เพิ่มหมายเหตุ
 
-  SavedHumanWeight({
+  SavedAnimalWeight({
     required this.id,
-    required this.personName,
+    required this.animalName,
+    required this.animalType,
     required this.weight,
     required this.timestamp,
     this.notes,
@@ -21,17 +23,19 @@ class SavedHumanWeight {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'person_name': personName, // แก้ไขจาก Animal_name
+      'animal_name': animalName,
+      'animal_type': animalType,
       'weight': weight,
       'timestamp': timestamp.millisecondsSinceEpoch,
       'notes': notes,
     };
   }
 
-  factory SavedHumanWeight.fromMap(Map<String, dynamic> map) {
-    return SavedHumanWeight(
+  factory SavedAnimalWeight.fromMap(Map<String, dynamic> map) {
+    return SavedAnimalWeight(
       id: map['id'],
-      personName: map['person_name'], // แก้ไขจาก Animal_name
+      animalName: map['animal_name'],
+      animalType: map['animal_type'],
       weight: map['weight'],
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp']),
       notes: map['notes'],
@@ -39,14 +43,34 @@ class SavedHumanWeight {
   }
 }
 
-class SaveHumanProvider extends ChangeNotifier {
+class SaveAnimalProvider extends ChangeNotifier {
   Database? _database;
   final Uuid _uuid = const Uuid();
-  List<SavedHumanWeight> _savedWeights = [];
+  List<SavedAnimalWeight> _savedWeights = [];
   bool _isLoading = false;
 
-  List<SavedHumanWeight> get savedWeights => _savedWeights;
+  List<SavedAnimalWeight> get savedWeights => _savedWeights;
   bool get isLoading => _isLoading;
+
+  // รายการประเภทสัตว์ที่นิยม
+  static const List<String> animalTypes = [
+    'หมา',
+    'แมว', 
+    'วัว',
+    'หมู',
+    'ไก่',
+    'เป็ด',
+    'แพะ',
+    'แกะ',
+    'ม้า',
+    'กบ',
+    'ปลา',
+    'นก',
+    'กิ้งก่า',
+    'งู',
+    'เต่า',
+    'สัตว์อื่นๆ',
+  ];
 
   // Initialize database
   Future<void> initDatabase() async {
@@ -59,9 +83,10 @@ class SaveHumanProvider extends ChangeNotifier {
         version: 2, // เพิ่ม version เพื่อ update schema
         onCreate: (db, version) async {
           await db.execute('''
-            CREATE TABLE Table_saveHuman (
+            CREATE TABLE Table_saveAnimal (
               id TEXT PRIMARY KEY,
-              person_name TEXT NOT NULL,
+              animal_name TEXT NOT NULL,
+              animal_type TEXT NOT NULL,
               weight REAL NOT NULL,
               timestamp INTEGER NOT NULL,
               notes TEXT
@@ -70,33 +95,29 @@ class SaveHumanProvider extends ChangeNotifier {
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
-            // แก้ไขชื่อ column ที่ผิด
-            try {
-              await db.execute('ALTER TABLE Table_saveHuman RENAME COLUMN Animal_name TO person_name');
-            } catch (e) {
-              // ถ้า column person_name มีอยู่แล้ว หรือ Animal_name ไม่มี
-              debugPrint('Column rename failed or not needed: $e');
-            }
+            // ถ้าตารางเก่าไม่มี animal_type และ notes
+            await db.execute('ALTER TABLE Table_saveAnimal ADD COLUMN animal_type TEXT');
+            await db.execute('ALTER TABLE Table_saveAnimal ADD COLUMN notes TEXT');
             
-            // เพิ่ม notes column
-            try {
-              await db.execute('ALTER TABLE Table_saveHuman ADD COLUMN notes TEXT');
-            } catch (e) {
-              debugPrint('Notes column already exists: $e');
-            }
+            // อัปเดต animal_type เป็นค่าเริ่มต้น
+            await db.execute("UPDATE Table_saveAnimal SET animal_type = 'สัตว์อื่นๆ' WHERE animal_type IS NULL");
+            
+            // เปลี่ยนชื่อ column person_name เป็น animal_name (ถ้ามี)
+            await db.execute('ALTER TABLE Table_saveAnimal RENAME COLUMN person_name TO animal_name');
           }
         },
       );
 
       await loadSavedWeights();
     } catch (e) {
-      debugPrint('Error initializing human database: $e');
+      debugPrint('Error initializing animal database: $e');
     }
   }
 
-  // Save weight data
-  Future<bool> saveWeight({
-    required String personName,
+  // Save animal weight data
+  Future<bool> saveAnimalWeight({
+    required String animalName,
+    required String animalType,
     required double weight,
     String? notes,
   }) async {
@@ -109,16 +130,17 @@ class SaveHumanProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final savedWeight = SavedHumanWeight(
+      final savedWeight = SavedAnimalWeight(
         id: _uuid.v4(),
-        personName: personName.trim(),
+        animalName: animalName.trim(),
+        animalType: animalType,
         weight: weight,
         timestamp: DateTime.now(),
         notes: notes?.trim(),
       );
 
       await _database!.insert(
-        'Table_saveHuman',
+        'Table_saveAnimal',
         savedWeight.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -127,12 +149,12 @@ class SaveHumanProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
-      debugPrint('Human weight saved successfully: ${savedWeight.personName} - ${savedWeight.weight}kg');
+      debugPrint('Animal weight saved successfully: ${savedWeight.animalName} (${savedWeight.animalType}) - ${savedWeight.weight}kg');
       return true;
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      debugPrint('Error saving human weight: $e');
+      debugPrint('Error saving animal weight: $e');
       return false;
     }
   }
@@ -146,17 +168,17 @@ class SaveHumanProvider extends ChangeNotifier {
       notifyListeners();
 
       final List<Map<String, dynamic>> maps = await _database!.query(
-        'Table_saveHuman',
+        'Table_saveAnimal',
         orderBy: 'timestamp DESC',
       );
 
-      _savedWeights = maps.map((map) => SavedHumanWeight.fromMap(map)).toList();
+      _savedWeights = maps.map((map) => SavedAnimalWeight.fromMap(map)).toList();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      debugPrint('Error loading saved human weights: $e');
+      debugPrint('Error loading saved animal weights: $e');
     }
   }
 
@@ -169,7 +191,7 @@ class SaveHumanProvider extends ChangeNotifier {
       notifyListeners();
 
       await _database!.delete(
-        'Table_saveHuman',
+        'Table_saveAnimal',
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -178,50 +200,66 @@ class SaveHumanProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
-      debugPrint('Human weight deleted successfully: $id');
+      debugPrint('Animal weight deleted successfully: $id');
       return true;
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      debugPrint('Error deleting human weight: $e');
+      debugPrint('Error deleting animal weight: $e');
       return false;
     }
   }
 
-  // Get weights by person name
-  List<SavedHumanWeight> getWeightsByPerson(String personName) {
+  // Get weights by animal name
+  List<SavedAnimalWeight> getWeightsByAnimal(String animalName) {
     return _savedWeights
-        .where((weight) => weight.personName.toLowerCase() == personName.toLowerCase())
+        .where((weight) => weight.animalName.toLowerCase() == animalName.toLowerCase())
         .toList();
   }
 
-  // Get latest weight for a person
-  SavedHumanWeight? getLatestWeightForPerson(String personName) {
-    final weights = getWeightsByPerson(personName);
+  // Get weights by animal type
+  List<SavedAnimalWeight> getWeightsByType(String animalType) {
+    return _savedWeights
+        .where((weight) => weight.animalType == animalType)
+        .toList();
+  }
+
+  // Get latest weight for an animal
+  SavedAnimalWeight? getLatestWeightForAnimal(String animalName) {
+    final weights = getWeightsByAnimal(animalName);
     return weights.isNotEmpty ? weights.first : null;
   }
 
   // Get weights within date range
-  List<SavedHumanWeight> getWeightsInRange(DateTime startDate, DateTime endDate) {
+  List<SavedAnimalWeight> getWeightsInRange(DateTime startDate, DateTime endDate) {
     return _savedWeights.where((weight) {
       return weight.timestamp.isAfter(startDate) && weight.timestamp.isBefore(endDate);
     }).toList();
   }
 
-  // Get unique person names
-  List<String> getUniquePersonNames() {
-    return _savedWeights.map((w) => w.personName).toSet().toList()..sort();
+  // Get unique animal names
+  List<String> getUniqueAnimalNames() {
+    return _savedWeights.map((w) => w.animalName).toSet().toList()..sort();
+  }
+
+  // Get animal type statistics
+  Map<String, int> getAnimalTypeStats() {
+    final typeCount = <String, int>{};
+    for (final weight in _savedWeights) {
+      typeCount[weight.animalType] = (typeCount[weight.animalType] ?? 0) + 1;
+    }
+    return typeCount;
   }
 
   // Export data as CSV string
   String exportToCSV() {
     final buffer = StringBuffer();
-    buffer.writeln('ID,Person Name,Weight (kg),Date,Time,Notes');
+    buffer.writeln('ID,Animal Name,Animal Type,Weight (kg),Date,Time,Notes');
 
     for (final weight in _savedWeights) {
       final date = weight.timestamp.toLocal();
       buffer.writeln(
-        '${weight.id},"${weight.personName}",${weight.weight},'
+        '${weight.id},"${weight.animalName}","${weight.animalType}",${weight.weight},'
         '${date.day}/${date.month}/${date.year},'
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')},'
         '"${weight.notes ?? ''}"',
@@ -239,17 +277,17 @@ class SaveHumanProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      await _database!.delete('Table_saveHuman');
+      await _database!.delete('Table_saveAnimal');
       _savedWeights.clear();
       _isLoading = false;
       notifyListeners();
 
-      debugPrint('All human weight data cleared');
+      debugPrint('All animal weight data cleared');
       return true;
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      debugPrint('Error clearing human data: $e');
+      debugPrint('Error clearing animal data: $e');
       return false;
     }
   }
@@ -259,24 +297,30 @@ class SaveHumanProvider extends ChangeNotifier {
     if (_savedWeights.isEmpty) {
       return {
         'totalRecords': 0,
-        'uniquePeople': 0,
+        'uniqueAnimals': 0,
+        'uniqueTypes': 0,
         'averageWeight': 0.0,
         'minWeight': 0.0,
         'maxWeight': 0.0,
         'latestRecord': null,
+        'typeStats': <String, int>{},
       };
     }
 
     final weights = _savedWeights.map((w) => w.weight).toList();
-    final uniquePeople = _savedWeights.map((w) => w.personName).toSet().length;
+    final uniqueAnimals = _savedWeights.map((w) => w.animalName).toSet().length;
+    final uniqueTypes = _savedWeights.map((w) => w.animalType).toSet().length;
+    final typeStats = getAnimalTypeStats();
     
     return {
       'totalRecords': _savedWeights.length,
-      'uniquePeople': uniquePeople,
+      'uniqueAnimals': uniqueAnimals,
+      'uniqueTypes': uniqueTypes,
       'averageWeight': weights.reduce((a, b) => a + b) / weights.length,
       'minWeight': weights.reduce((a, b) => a < b ? a : b),
       'maxWeight': weights.reduce((a, b) => a > b ? a : b),
       'latestRecord': _savedWeights.first,
+      'typeStats': typeStats,
     };
   }
 
