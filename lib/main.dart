@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/pages/CalibrationZeroPage.dart';
+import 'package:try_bluetooth/pages/DisplayAutoSaveWeightPage.dart';
 import 'package:try_bluetooth/pages/SettingsPage.dart';
 import 'package:try_bluetooth/pages/DisplayPage.dart';
 import 'package:try_bluetooth/pages/UserListPage.dart';
@@ -241,7 +242,7 @@ class _NavigationExampleState extends State<NavigationExample> {
   ) {
     switch (currentPageIndex) {
       case 0:
-        return PopupWidget(); // BLE Data Display page
+        return DisplayAutoSaveWeightPage(); //PopupWidget(); // BLE Data Display page
       case 1:
         return const CalibrationWidget(); // Weight Calibration page
       case 2:
