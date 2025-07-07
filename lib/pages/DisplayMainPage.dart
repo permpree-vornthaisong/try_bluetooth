@@ -158,6 +158,7 @@ class PopupWidget extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           // Set Tare Button - ใช้ค่าปัจจุบันเพื่อ Tare
+                          const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
                             child: Consumer<DisplayMainProvider>(
@@ -172,28 +173,6 @@ class PopupWidget extends StatelessWidget {
                                                   'TARE',
                                                 );
                                                 print("TARE button pressed");
-                                                // final result =
-                                                //     await popupProvider
-                                                //         .performTare();
-
-                                                // if (context.mounted) {
-                                                //   ScaffoldMessenger.of(
-                                                //     context,
-                                                //   ).showSnackBar(
-                                                //     SnackBar(
-                                                //       content: Text(
-                                                //         result.message,
-                                                //       ),
-                                                //       backgroundColor:
-                                                //           result.success
-                                                //               ? Colors.blue
-                                                //               : Colors.red,
-                                                //       duration: const Duration(
-                                                //         seconds: 2,
-                                                //       ),
-                                                //     ),
-                                                //   );
-                                                // }
                                               },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue.shade100,
@@ -228,10 +207,6 @@ class PopupWidget extends StatelessWidget {
                               },
                             ),
                           ),
-
-                          const SizedBox(height: 8),
-
-                          // Clear Tare Button - ล้างค่า Tare
                           SizedBox(
                             width: double.infinity,
                             child: Consumer<DisplayMainProvider>(
@@ -240,36 +215,26 @@ class PopupWidget extends StatelessWidget {
                                   onPressed:
                                       popupProvider.isProcessing
                                           ? null
-                                          : () async {
-                                            final result =
-                                                await popupProvider.clearTare();
-
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(result.message),
-                                                  backgroundColor:
-                                                      result.success
-                                                          ? Colors.orange
-                                                          : Colors.red,
-                                                  duration: const Duration(
-                                                    seconds: 2,
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                          },
+                                          : onTarePressed ??
+                                              () async {
+                                                popupProvider.sendCustomCommand(
+                                                  'CLEAR_TARE',
+                                                );
+                                                print("CLEAR button pressed");
+                                              },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        popupProvider.hasTareOffset
-                                            ? Colors.orange.shade100
-                                            : Colors.grey.shade200,
-                                    foregroundColor:
-                                        popupProvider.hasTareOffset
-                                            ? Colors.orange.shade800
-                                            : Colors.grey.shade600,
+                                    backgroundColor: const Color.fromARGB(
+                                      255,
+                                      246,
+                                      237,
+                                      62,
+                                    ),
+                                    foregroundColor: const Color.fromARGB(
+                                      255,
+                                      0,
+                                      0,
+                                      0,
+                                    ),
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 12,
                                     ),
@@ -280,85 +245,7 @@ class PopupWidget extends StatelessWidget {
                                   child:
                                       popupProvider.isProcessing &&
                                               popupProvider.lastOperation ==
-                                                  'CLEAR_TARE'
-                                          ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                          : Text(
-                                            popupProvider.hasTareOffset
-                                                ? 'Clear Tare'
-                                                : 'No Tare',
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                );
-                              },
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // Zero Button - ส่งคำสั่งไป ESP32
-                          SizedBox(
-                            width: double.infinity,
-                            child: Consumer<DisplayMainProvider>(
-                              builder: (context, popupProvider, child) {
-                                return ElevatedButton(
-                                  onPressed:
-                                      popupProvider.isProcessing
-                                          ? null
-                                          : onZeroPressed ??
-                                              () async {
-                                                final result =
-                                                    await popupProvider
-                                                        .sendZeroCommand();
-
-                                                if (context.mounted) {
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        result.message,
-                                                      ),
-                                                      backgroundColor:
-                                                          result.success
-                                                              ? Colors.orange
-                                                              : Colors.red,
-                                                      duration: const Duration(
-                                                        seconds: 2,
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        popupProvider.isConnected
-                                            ? Colors.orange.shade100
-                                            : Colors.grey.shade200,
-                                    foregroundColor:
-                                        popupProvider.isConnected
-                                            ? Colors.orange.shade800
-                                            : Colors.grey.shade600,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child:
-                                      popupProvider.isProcessing &&
-                                              popupProvider.lastOperation ==
-                                                  'ZERO'
+                                                  'ClEAR_TARE'
                                           ? const SizedBox(
                                             width: 16,
                                             height: 16,
@@ -367,7 +254,7 @@ class PopupWidget extends StatelessWidget {
                                             ),
                                           )
                                           : const Text(
-                                            'Zero\n(ESP32)',
+                                            'Clear Tare',
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
                                               fontSize: 14,
@@ -376,38 +263,6 @@ class PopupWidget extends StatelessWidget {
                                           ),
                                 );
                               },
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // Settings Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed:
-                                  onCalibrationPressed ??
-                                  () {
-                                    Navigator.pushNamed(context, '/settings');
-                                  },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey.shade100,
-                                foregroundColor: Colors.grey.shade800,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text(
-                                'Settings\n& BLE',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
                             ),
                           ),
                         ],
