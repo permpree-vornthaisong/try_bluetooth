@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:try_bluetooth/providers/PopupProvider.dart';
 import '../providers/SettingProvider.dart';
 import '../providers/CalibrationProvider.dart';
 import '../providers/DisplayProvider.dart';
@@ -8,14 +10,12 @@ class PopupWidget extends StatelessWidget {
   final VoidCallback? onTarePressed;
   final VoidCallback? onZeroPressed;
   final VoidCallback? onCalibrationPressed;
-  final String currentWeight;
-  
+
   const PopupWidget({
     super.key,
     this.onTarePressed,
     this.onZeroPressed,
     this.onCalibrationPressed,
-    this.currentWeight = '0.0',
   });
 
   @override
@@ -34,15 +34,16 @@ class PopupWidget extends StatelessWidget {
             // Header Tabs
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-              ),
+              decoration: BoxDecoration(color: Colors.grey.shade100),
               child: Row(
                 children: [
                   // ปุ่มกำหนด
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
@@ -59,12 +60,15 @@ class PopupWidget extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  
+
                   // ปรับโรงงาน
                   Expanded(
                     flex: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
@@ -81,38 +85,54 @@ class PopupWidget extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  
-                  // สถานะการเชื่อมต่อ
+
+                  // สถานะการเชื่อมต่อ - ใช้ PopupProvider
                   Expanded(
-                    child: Consumer<SettingProvider>(
-                      builder: (context, settingProvider, child) {
-                        bool isConnected = settingProvider.connectedDevice != null;
+                    child: Consumer<PopupProvider>(
+                      builder: (context, popupProvider, child) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 12,
+                          ),
                           decoration: BoxDecoration(
-                            color: isConnected ? Colors.green.shade50 : Colors.red.shade50,
+                            color:
+                                popupProvider.isConnected
+                                    ? Colors.green.shade50
+                                    : Colors.red.shade50,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isConnected ? Colors.green.shade300 : Colors.red.shade300,
+                              color:
+                                  popupProvider.isConnected
+                                      ? Colors.green.shade300
+                                      : Colors.red.shade300,
                             ),
                           ),
                           child: Column(
                             children: [
                               Icon(
-                                isConnected 
-                                    ? Icons.bluetooth_connected 
+                                popupProvider.isConnected
+                                    ? Icons.bluetooth_connected
                                     : Icons.bluetooth_disabled,
-                                color: isConnected ? Colors.green : Colors.red,
+                                color:
+                                    popupProvider.isConnected
+                                        ? Colors.green
+                                        : Colors.red,
                                 size: 16,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                isConnected ? 'เชื่อมต่อ' : 'ไม่เชื่อมต่อ',
+                                popupProvider.isConnected
+                                    ? 'เชื่อมต่อ'
+                                    : 'ไม่เชื่อมต่อ',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
-                                  color: isConnected ? Colors.green.shade800 : Colors.red.shade800,
+                                  color:
+                                      popupProvider.isConnected
+                                          ? Colors.green.shade800
+                                          : Colors.red.shade800,
                                 ),
                               ),
                             ],
@@ -124,7 +144,7 @@ class PopupWidget extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             // Main Content
             Expanded(
               child: Padding(
@@ -137,144 +157,265 @@ class PopupWidget extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Tare Button
+                          // Set Tare Button - ใช้ค่าปัจจุบันเพื่อ Tare
                           SizedBox(
                             width: double.infinity,
-                            child: Consumer<DisplayProvider>(
-                              builder: (context, displayProvider, child) {
+                            child: Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
                                 return ElevatedButton(
-                                  onPressed: onTarePressed ?? () {
-                                    // ใช้ Provider ถ้าไม่มี callback
-                                    displayProvider.clearTare();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Tare ล้างค่าแล้ว'),
-                                        backgroundColor: Colors.blue,
-                                        duration: Duration(seconds: 1),
-                                      ),
-                                    );
-                                  },
+                                  onPressed:
+                                      popupProvider.isProcessing
+                                          ? null
+                                          : onTarePressed ??
+                                              () async {
+                                                popupProvider.sendCustomCommand(
+                                                  'TARE',
+                                                );
+                                                print("TARE button pressed");
+                                                // final result =
+                                                //     await popupProvider
+                                                //         .performTare();
+
+                                                // if (context.mounted) {
+                                                //   ScaffoldMessenger.of(
+                                                //     context,
+                                                //   ).showSnackBar(
+                                                //     SnackBar(
+                                                //       content: Text(
+                                                //         result.message,
+                                                //       ),
+                                                //       backgroundColor:
+                                                //           result.success
+                                                //               ? Colors.blue
+                                                //               : Colors.red,
+                                                //       duration: const Duration(
+                                                //         seconds: 2,
+                                                //       ),
+                                                //     ),
+                                                //   );
+                                                // }
+                                              },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: displayProvider.tareOffset != 0.0 
-                                        ? Colors.orange.shade100 
-                                        : Colors.blue.shade100,
-                                    foregroundColor: displayProvider.tareOffset != 0.0 
-                                        ? Colors.orange.shade800 
-                                        : Colors.blue.shade800,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    backgroundColor: Colors.blue.shade100,
+                                    foregroundColor: Colors.blue.shade800,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                  child: Text(
-                                    displayProvider.tareOffset != 0.0 ? 'Clear Tare' : 'Tare',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  child:
+                                      popupProvider.isProcessing &&
+                                              popupProvider.lastOperation ==
+                                                  'TARE'
+                                          ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                          : const Text(
+                                            'Set Tare',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                 );
                               },
                             ),
                           ),
-                          
-                          const SizedBox(height: 12),
-                          
-                          // Zero Button
+
+                          const SizedBox(height: 8),
+
+                          // Clear Tare Button - ล้างค่า Tare
                           SizedBox(
                             width: double.infinity,
-                            child: Consumer<SettingProvider>(
-                              builder: (context, settingProvider, child) {
+                            child: Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
                                 return ElevatedButton(
-                                  onPressed: onZeroPressed ?? () {
-                                    // ส่งคำสั่ง Zero ไป ESP32
-                                    if (settingProvider.connectedDevice != null) {
-                                      // ส่งคำสั่ง zero ผ่าน BLE
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('ส่งคำสั่ง Zero แล้ว'),
-                                          backgroundColor: Colors.orange,
-                                          duration: Duration(seconds: 1),
-                                        ),
-                                      );
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('ไม่ได้เชื่อมต่ออุปกรณ์'),
-                                          backgroundColor: Colors.red,
-                                          duration: Duration(seconds: 1),
-                                        ),
-                                      );
-                                    }
-                                  },
+                                  onPressed:
+                                      popupProvider.isProcessing
+                                          ? null
+                                          : () async {
+                                            final result =
+                                                await popupProvider.clearTare();
+
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(result.message),
+                                                  backgroundColor:
+                                                      result.success
+                                                          ? Colors.orange
+                                                          : Colors.red,
+                                                  duration: const Duration(
+                                                    seconds: 2,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: settingProvider.connectedDevice != null 
-                                        ? Colors.orange.shade100 
-                                        : Colors.grey.shade200,
-                                    foregroundColor: settingProvider.connectedDevice != null 
-                                        ? Colors.orange.shade800 
-                                        : Colors.grey.shade600,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    backgroundColor:
+                                        popupProvider.hasTareOffset
+                                            ? Colors.orange.shade100
+                                            : Colors.grey.shade200,
+                                    foregroundColor:
+                                        popupProvider.hasTareOffset
+                                            ? Colors.orange.shade800
+                                            : Colors.grey.shade600,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                  child: const Text(
-                                    'Zero',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  child:
+                                      popupProvider.isProcessing &&
+                                              popupProvider.lastOperation ==
+                                                  'CLEAR_TARE'
+                                          ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                          : Text(
+                                            popupProvider.hasTareOffset
+                                                ? 'Clear Tare'
+                                                : 'No Tare',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                 );
                               },
                             ),
                           ),
-                          
+
                           const SizedBox(height: 12),
-                          
-                          // Calibration Button
+
+                          // Zero Button - ส่งคำสั่งไป ESP32
                           SizedBox(
                             width: double.infinity,
-                            child: Consumer<CalibrationProvider>(
-                              builder: (context, calibrationProvider, child) {
+                            child: Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
                                 return ElevatedButton(
-                                  onPressed: onCalibrationPressed ?? () {
-                                    // ไปหน้าปรับเทียบ
-                                    Navigator.pushNamed(context, '/calibration');
-                                  },
+                                  onPressed:
+                                      popupProvider.isProcessing
+                                          ? null
+                                          : onZeroPressed ??
+                                              () async {
+                                                final result =
+                                                    await popupProvider
+                                                        .sendZeroCommand();
+
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        result.message,
+                                                      ),
+                                                      backgroundColor:
+                                                          result.success
+                                                              ? Colors.orange
+                                                              : Colors.red,
+                                                      duration: const Duration(
+                                                        seconds: 2,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: calibrationProvider.isCalibrated 
-                                        ? Colors.green.shade100 
-                                        : Colors.yellow.shade100,
-                                    foregroundColor: calibrationProvider.isCalibrated 
-                                        ? Colors.green.shade800 
-                                        : Colors.yellow.shade800,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    backgroundColor:
+                                        popupProvider.isConnected
+                                            ? Colors.orange.shade100
+                                            : Colors.grey.shade200,
+                                    foregroundColor:
+                                        popupProvider.isConnected
+                                            ? Colors.orange.shade800
+                                            : Colors.grey.shade600,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                  child: Text(
-                                    calibrationProvider.isCalibrated 
-                                        ? 'ปรับเทียบแล้ว\n(${calibrationProvider.calibrationPoints.length})' 
-                                        : 'ปรับเทียบ\nเซนเซอร์',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  child:
+                                      popupProvider.isProcessing &&
+                                              popupProvider.lastOperation ==
+                                                  'ZERO'
+                                          ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                          : const Text(
+                                            'Zero\n(ESP32)',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                 );
                               },
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Settings Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed:
+                                  onCalibrationPressed ??
+                                  () {
+                                    Navigator.pushNamed(context, '/settings');
+                                  },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey.shade100,
+                                foregroundColor: Colors.grey.shade800,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text(
+                                'Settings\n& BLE',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    
+
                     const SizedBox(width: 16),
-                    
+
                     // Right Side - Weight Display
                     Expanded(
                       child: Container(
@@ -289,55 +430,40 @@ class PopupWidget extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             // Weight Icon
-                            Icon(
-                              Icons.scale,
-                              size: 48,
-                              color: Colors.grey.shade600,
+                            Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
+                                return Icon(
+                                  Icons.scale,
+                                  size: 48,
+                                  color:
+                                      popupProvider.isConnected
+                                          ? Colors.blue.shade600
+                                          : Colors.grey.shade600,
+                                );
+                              },
                             ),
-                            
+
                             const SizedBox(height: 16),
-                            
-                            // Weight Value - ใช้ Consumer แสดงน้ำหนักแบบ real-time
-                            Consumer2<DisplayProvider, SettingProvider>(
-                              builder: (context, displayProvider, settingProvider, child) {
-                                // ใช้ข้อมูลจาก SettingProvider เหมือน CalibrationZeroPage
-                                double? rawValue = settingProvider.currentRawValue;
-                                String displayWeight = currentWeight;
-                                
-                                // ถ้ามีข้อมูลจาก Provider ใช้แทน
-                                if (displayProvider.hasValidWeight) {
-                                  // ดึงน้ำหนักจาก DisplayProvider และปรับเป็นค่าบวก
-                                  double weight = displayProvider.netWeight ?? 0.0;
-                                  // ถ้าน้อยกว่า 0 หรือ -0 ให้แสดง 0
-                                  if (weight <= 0.0) {
-                                    displayWeight = "0.0";
-                                  } else {
-                                    displayWeight = weight.abs().toStringAsFixed(1);
-                                  }
-                                } else if (rawValue != null) {
-                                  // ถ้าน้อยกว่า 0 หรือ -0 ให้แสดง 0
-                                  if (rawValue <= 0.0) {
-                                    displayWeight = "0.0";
-                                  } else {
-                                    displayWeight = rawValue.abs().toStringAsFixed(1);
-                                  }
-                                }
-                                
+
+                            // Weight Value - ใช้ PopupProvider
+                            Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
                                 return Text(
-                                  displayWeight,
+                                  popupProvider.formattedWeight,
                                   style: TextStyle(
                                     fontSize: 48,
                                     fontWeight: FontWeight.bold,
-                                    color: rawValue != null 
-                                        ? Colors.blue.shade800 
-                                        : Colors.grey.shade800,
+                                    color:
+                                        popupProvider.currentRawValue != null
+                                            ? Colors.blue.shade800
+                                            : Colors.grey.shade800,
                                   ),
                                 );
                               },
                             ),
-                            
+
                             const SizedBox(height: 8),
-                            
+
                             // kg Unit
                             Text(
                               'kg',
@@ -347,27 +473,231 @@ class PopupWidget extends StatelessWidget {
                                 color: Colors.grey.shade600,
                               ),
                             ),
-                            
+
                             const SizedBox(height: 24),
-                            
-                            // Status Text
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Text(
-                                'น้ำหนักปัจจุบัน',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
+
+                            // Status Container - ใช้ PopupProvider
+                            Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'น้ำหนักปัจจุบัน: ${popupProvider.formattedWeight} kg',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      if (popupProvider.hasTareOffset) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Tare Offset: ${popupProvider.tareOffset.toStringAsFixed(1)} kg',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.orange.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                      if (popupProvider.isProcessing) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'กำลังดำเนินการ: ${popupProvider.lastOperation}...',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blue.shade600,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Additional Weight Information
+                            Consumer<PopupProvider>(
+                              builder: (context, popupProvider, child) {
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.blue.shade200,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      // Raw Weight
+                                      // Row(
+                                      //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      //   children: [
+                                      //     Text(
+                                      //       'Raw Weight:',
+                                      //       style: TextStyle(
+                                      //         fontSize: 12,
+                                      //         color: Colors.blue.shade700,
+                                      //         fontWeight: FontWeight.w500,
+                                      //       ),
+                                      //     ),
+                                      //     Text(
+                                      //       '${popupProvider.rawWeightWithoutTare?.toStringAsFixed(1) ?? "-.--"} kg',
+                                      //       style: TextStyle(
+                                      //         fontSize: 12,
+                                      //         color: Colors.blue.shade800,
+                                      //         fontWeight: FontWeight.bold,
+                                      //       ),
+                                      //     ),
+                                      //   ],
+                                      // ),
+
+                                      // Tare Offset
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Tare Offset:',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${popupProvider.tareOffset.toStringAsFixed(1)} kg',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange.shade800,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+
+                                      // Net Weight
+                                      const SizedBox(height: 4),
+                                      // Row(
+                                      //   mainAxisAlignment:
+                                      //       MainAxisAlignment.spaceBetween,
+                                      //   children: [
+                                      //     Text(
+                                      //       'Net Weight:',
+                                      //       style: TextStyle(
+                                      //         fontSize: 12,
+                                      //         color: Colors.green.shade700,
+                                      //         fontWeight: FontWeight.w500,
+                                      //       ),
+                                      //     ),
+                                      //     Text(
+                                      //       '${popupProvider.netWeight?.toStringAsFixed(1) ?? "-.--"} kg',
+                                      //       style: TextStyle(
+                                      //         fontSize: 12,
+                                      //         color: Colors.green.shade800,
+                                      //         fontWeight: FontWeight.bold,
+                                      //       ),
+                                      //     ),
+                                      //   ],
+                                      // ),
+
+                                      // Connection and Operations Statistics
+                                      const SizedBox(height: 8),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceAround,
+                                        children: [
+                                          Column(
+                                            children: [
+                                              Text(
+                                                '${popupProvider.tareOperations}',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.blue.shade700,
+                                                ),
+                                              ),
+                                              Text(
+                                                'Tare',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.blue.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Column(
+                                            children: [
+                                              Text(
+                                                '${popupProvider.zeroOperations}',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.orange.shade700,
+                                                ),
+                                              ),
+                                              Text(
+                                                'Zero',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.orange.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Column(
+                                            children: [
+                                              Icon(
+                                                popupProvider.isConnected
+                                                    ? Icons.link
+                                                    : Icons.link_off,
+                                                color:
+                                                    popupProvider.isConnected
+                                                        ? Colors.green
+                                                        : Colors.red,
+                                                size: 16,
+                                              ),
+                                              Text(
+                                                popupProvider.isConnected
+                                                    ? 'Connected'
+                                                    : 'Offline',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color:
+                                                      popupProvider.isConnected
+                                                          ? Colors
+                                                              .green
+                                                              .shade600
+                                                          : Colors.red.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -384,81 +714,60 @@ class PopupWidget extends StatelessWidget {
   }
 }
 
-// Helper function สำหรับแสดงสถานะการเชื่อมต่อ (ตาม CalibrationZeroPage)
-Widget buildConnectionStatus(BuildContext context, {
-  SettingProvider? settingProvider,
-  String connectionStatus = 'Disconnected',
-  String deviceName = 'No Device',
-  bool isConnected = false,
-  bool isCalibrated = false,
-  int calibrationPointsCount = 0,
-}) {
-  // ถ้าส่ง settingProvider มาใช้ข้อมูลจริง
-  if (settingProvider != null) {
-    isConnected = settingProvider.connectedDevice != null;
-    connectionStatus = settingProvider.connectionStatus;
-    if (isConnected) {
-      deviceName = settingProvider.getBLEDeviceDisplayName(settingProvider.connectedDevice!);
-    }
-  }
-
-  return Card(
-    margin: const EdgeInsets.all(8),
-    color: isConnected ? Colors.green.shade50 : Colors.red.shade50,
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          // Connection Status
-          Icon(
-            isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-            color: isConnected ? Colors.green : Colors.red,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isConnected 
-                      ? 'เชื่อมต่อ: $deviceName'
-                      : 'ยังไม่ได้เชื่อมต่อ Bluetooth',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: isConnected ? Colors.green.shade700 : Colors.red.shade700,
-                  ),
-                ),
-                if (isConnected)
-                  Text(
-                    'Status: $connectionStatus',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // Calibration Status
-          if (isCalibrated) ...[
-            const SizedBox(width: 16),
-            Icon(
-              Icons.check_circle,
-              color: Colors.green,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Calibrated ($calibrationPointsCount)',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.green,
-                fontWeight: FontWeight.w500,
+// Helper function สำหรับแสดงสถานะการเชื่อมต่อ (ใช้ PopupProvider)
+Widget buildConnectionStatus(BuildContext context) {
+  return Consumer<PopupProvider>(
+    builder: (context, popupProvider, child) {
+      return Card(
+        margin: const EdgeInsets.all(8),
+        color:
+            popupProvider.isConnected
+                ? Colors.green.shade50
+                : Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Connection Status
+              Icon(
+                popupProvider.isConnected
+                    ? Icons.bluetooth_connected
+                    : Icons.bluetooth_disabled,
+                color: popupProvider.isConnected ? Colors.green : Colors.red,
               ),
-            ),
-          ],
-        ],
-      ),
-    ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      popupProvider.isConnected
+                          ? 'เชื่อมต่อ: ${popupProvider.deviceName}'
+                          : 'ยังไม่ได้เชื่อมต่อ Bluetooth',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color:
+                            popupProvider.isConnected
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                      ),
+                    ),
+                    if (popupProvider.isConnected)
+                      Text(
+                        'Status: ${popupProvider.connectionStatus}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
   );
 }
 
@@ -475,23 +784,7 @@ class ExampleUsage extends StatelessWidget {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => PopupWidget(
-                  // currentWeight: '75.5',
-                  onTarePressed: () {
-                    print('Tare pressed');
-                    // Provider logic จะใส่ที่นี่
-                  },
-                  onZeroPressed: () {
-                    print('Zero pressed');
-                    // Provider logic จะใส่ที่นี่
-                  },
-                  onCalibrationPressed: () {
-                    print('Calibration pressed');
-                    // Provider logic จะใส่ที่นี่
-                  },
-                ),
-              ),
+              MaterialPageRoute(builder: (context) => const PopupWidget()),
             );
           },
           child: const Text('Go to Control Page'),
