@@ -6,7 +6,7 @@ import 'package:path/path.dart';
 import 'SettingProvider.dart';
 import 'DisplayProvider.dart';
 
-class PopupProvider extends ChangeNotifier {
+class DisplayMainProvider extends ChangeNotifier {
   // Dependencies
   SettingProvider? _settingProvider;
   DisplayProvider? _displayProvider;
@@ -226,7 +226,7 @@ class PopupProvider extends ChangeNotifier {
   }
   
   // Initialize with providers - แก้ไขให้ return PopupProvider
-  PopupProvider initializeWithProviders(
+  DisplayMainProvider initializeWithProviders(
     SettingProvider settingProvider,
     DisplayProvider displayProvider,
   ) {

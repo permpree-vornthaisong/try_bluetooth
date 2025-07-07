@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:try_bluetooth/providers/PopupProvider.dart';
+import 'package:try_bluetooth/providers/DisplayMainProvider.dart';
 import '../providers/SettingProvider.dart';
 import '../providers/CalibrationProvider.dart';
 import '../providers/DisplayProvider.dart';
@@ -88,7 +88,7 @@ class PopupWidget extends StatelessWidget {
 
                   // สถานะการเชื่อมต่อ - ใช้ PopupProvider
                   Expanded(
-                    child: Consumer<PopupProvider>(
+                    child: Consumer<DisplayMainProvider>(
                       builder: (context, popupProvider, child) {
                         return Container(
                           padding: const EdgeInsets.symmetric(
@@ -160,7 +160,7 @@ class PopupWidget extends StatelessWidget {
                           // Set Tare Button - ใช้ค่าปัจจุบันเพื่อ Tare
                           SizedBox(
                             width: double.infinity,
-                            child: Consumer<PopupProvider>(
+                            child: Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return ElevatedButton(
                                   onPressed:
@@ -234,7 +234,7 @@ class PopupWidget extends StatelessWidget {
                           // Clear Tare Button - ล้างค่า Tare
                           SizedBox(
                             width: double.infinity,
-                            child: Consumer<PopupProvider>(
+                            child: Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return ElevatedButton(
                                   onPressed:
@@ -308,7 +308,7 @@ class PopupWidget extends StatelessWidget {
                           // Zero Button - ส่งคำสั่งไป ESP32
                           SizedBox(
                             width: double.infinity,
-                            child: Consumer<PopupProvider>(
+                            child: Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return ElevatedButton(
                                   onPressed:
@@ -430,7 +430,7 @@ class PopupWidget extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             // Weight Icon
-                            Consumer<PopupProvider>(
+                            Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return Icon(
                                   Icons.scale,
@@ -446,7 +446,7 @@ class PopupWidget extends StatelessWidget {
                             const SizedBox(height: 16),
 
                             // Weight Value - ใช้ PopupProvider
-                            Consumer<PopupProvider>(
+                            Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return Text(
                                   popupProvider.formattedWeight,
@@ -477,7 +477,7 @@ class PopupWidget extends StatelessWidget {
                             const SizedBox(height: 24),
 
                             // Status Container - ใช้ PopupProvider
-                            Consumer<PopupProvider>(
+                            Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return Container(
                                   padding: const EdgeInsets.symmetric(
@@ -532,7 +532,7 @@ class PopupWidget extends StatelessWidget {
                             const SizedBox(height: 16),
 
                             // Additional Weight Information
-                            Consumer<PopupProvider>(
+                            Consumer<DisplayMainProvider>(
                               builder: (context, popupProvider, child) {
                                 return Container(
                                   padding: const EdgeInsets.all(12),
@@ -716,7 +716,7 @@ class PopupWidget extends StatelessWidget {
 
 // Helper function สำหรับแสดงสถานะการเชื่อมต่อ (ใช้ PopupProvider)
 Widget buildConnectionStatus(BuildContext context) {
-  return Consumer<PopupProvider>(
+  return Consumer<DisplayMainProvider>(
     builder: (context, popupProvider, child) {
       return Card(
         margin: const EdgeInsets.all(8),

@@ -6,11 +6,11 @@ import 'package:try_bluetooth/pages/SettingsPage.dart';
 import 'package:try_bluetooth/pages/DisplayPage.dart';
 import 'package:try_bluetooth/pages/UserListPage.dart';
 import 'package:try_bluetooth/pages/WeightHumanPage.dart';
-import 'package:try_bluetooth/pages/popup_widget.dart';
+import 'package:try_bluetooth/pages/DisplayMainPage.dart';
 import 'package:try_bluetooth/providers/CRUDSQLiteProvider.dart'
     show CRUDSQLiteProvider;
 import 'package:try_bluetooth/providers/CRUD_Services_Providers.dart';
-import 'package:try_bluetooth/providers/PopupProvider.dart';
+import 'package:try_bluetooth/providers/DisplayMainProvider.dart';
 import 'package:try_bluetooth/providers/SaveAnimalProvider.dart';
 import 'package:try_bluetooth/providers/SaveHumanProvider.dart';
 import 'package:try_bluetooth/providers/SaveObjectProvider.dart';
@@ -104,9 +104,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProxyProvider2<
           SettingProvider,
           DisplayProvider,
-          PopupProvider
+          DisplayMainProvider
         >(
-          create: (_) => PopupProvider(),
+          create: (_) => DisplayMainProvider(),
           update: (context, settingProvider, displayProvider, previous) {
             // วิธีที่ถูกต้อง - แยกขั้นตอนออกมา
             if (previous != null) {
@@ -116,7 +116,7 @@ class MyApp extends StatelessWidget {
               );
               return previous;
             } else {
-              final newProvider = PopupProvider();
+              final newProvider = DisplayMainProvider();
               newProvider.initializeWithProviders(
                 settingProvider,
                 displayProvider,
@@ -168,7 +168,7 @@ class _NavigationExampleState extends State<NavigationExample> {
         context,
         listen: false,
       );
-      final popupProvider = Provider.of<PopupProvider>(context, listen: false);
+      final popupProvider = Provider.of<DisplayMainProvider>(context, listen: false);
 
       // เชื่อมต่อ CalibrationEasy กับ SettingProvider
       calibrationEasy.connectToSettingProvider(settingProvider);
@@ -207,12 +207,8 @@ class _NavigationExampleState extends State<NavigationExample> {
                 label: 'Display',
               ),
               NavigationDestination(
-                icon: Badge(child: Icon(Icons.tune)),
-                label: 'Calibration',
-              ),
-              NavigationDestination(
                 icon: Badge(child: Icon(Icons.factory)),
-                label: 'Factory',
+                label: 'DataBase',
               ),
               NavigationDestination(
                 icon: Badge(child: Icon(Icons.notifications_sharp)),
@@ -249,13 +245,11 @@ class _NavigationExampleState extends State<NavigationExample> {
       case 1:
         return const CalibrationWidget(); // Weight Calibration page
       case 2:
-        return CalibrationWidget(); // Weight Calibration page
-      case 3:
         return _buildNotificationsPage();
-      case 4:
+      case 3:
         return const SettingsPage(); // BLE Settings page
       default:
-        return const DisplayPage();
+        return const PopupWidget();
     }
   }
 
@@ -265,7 +259,7 @@ class _NavigationExampleState extends State<NavigationExample> {
       CalibrationEasy,
       CalibrationProvider,
       SaveHumanProvider,
-      PopupProvider
+      DisplayMainProvider
     >(
       builder: (
         context,
@@ -320,81 +314,81 @@ class _NavigationExampleState extends State<NavigationExample> {
                 ),
 
                 // ✅ Test PopupProvider Functions
-                Card(
-                  color: Colors.blue.shade50,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.scale, color: Colors.blue),
-                        title: const Text('Test PopupProvider'),
-                        subtitle: const Text('Test Tare and Zero functions'),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed:
-                                    popupProvider.isProcessing
-                                        ? null
-                                        : () async {
-                                          final result =
-                                              await popupProvider.toggleTare();
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(result.message),
-                                                backgroundColor:
-                                                    result.success
-                                                        ? Colors.blue
-                                                        : Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                child: Text(
-                                  popupProvider.hasTareOffset
-                                      ? 'Clear Tare'
-                                      : 'Set Tare',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed:
-                                    popupProvider.isProcessing
-                                        ? null
-                                        : () async {
-                                          final result =
-                                              await popupProvider
-                                                  .sendZeroCommand();
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(result.message),
-                                                backgroundColor:
-                                                    result.success
-                                                        ? Colors.orange
-                                                        : Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                child: const Text('Send Zero'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                // Card(
+                //   color: Colors.blue.shade50,
+                //   child: Column(
+                //     children: [
+                //       ListTile(
+                //         leading: const Icon(Icons.scale, color: Colors.blue),
+                //         title: const Text('Test PopupProvider'),
+                //         subtitle: const Text('Test Tare and Zero functions'),
+                //       ),
+                //       Padding(
+                //         padding: const EdgeInsets.all(16.0),
+                //         child: Row(
+                //           children: [
+                //             Expanded(
+                //               child: ElevatedButton(
+                //                 onPressed:
+                //                     popupProvider.isProcessing
+                //                         ? null
+                //                         : () async {
+                //                           final result =
+                //                               await popupProvider.toggleTare();
+                //                           if (context.mounted) {
+                //                             ScaffoldMessenger.of(
+                //                               context,
+                //                             ).showSnackBar(
+                //                               SnackBar(
+                //                                 content: Text(result.message),
+                //                                 backgroundColor:
+                //                                     result.success
+                //                                         ? Colors.blue
+                //                                         : Colors.red,
+                //                               ),
+                //                             );
+                //                           }
+                //                         },
+                //                 child: Text(
+                //                   popupProvider.hasTareOffset
+                //                       ? 'Clear Tare'
+                //                       : 'Set Tare',
+                //                 ),
+                //               ),
+                //             ),
+                //             const SizedBox(width: 8),
+                //             Expanded(
+                //               child: ElevatedButton(
+                //                 onPressed:
+                //                     popupProvider.isProcessing
+                //                         ? null
+                //                         : () async {
+                //                           final result =
+                //                               await popupProvider
+                //                                   .sendZeroCommand();
+                //                           if (context.mounted) {
+                //                             ScaffoldMessenger.of(
+                //                               context,
+                //                             ).showSnackBar(
+                //                               SnackBar(
+                //                                 content: Text(result.message),
+                //                                 backgroundColor:
+                //                                     result.success
+                //                                         ? Colors.orange
+                //                                         : Colors.red,
+                //                               ),
+                //                             );
+                //                           }
+                //                         },
+                //                 child: const Text('Send Zero'),
+                //               ),
+                //             ),
+                //           ],
+                //         ),
+                //       ),
+                //     ],
+                //   ),
+                // ),
 
                 // ✅ Database Status Card
                 Card(
@@ -425,45 +419,45 @@ class _NavigationExampleState extends State<NavigationExample> {
                 ),
 
                 // ✅ Quick Actions
-                Card(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.person, color: Colors.blue),
-                        title: const Text('Weight Human Page'),
-                        subtitle: const Text('Test the WeightHumanPage'),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const WeightHumanPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(
-                          Icons.control_camera,
-                          color: Colors.green,
-                        ),
-                        title: const Text('Popup Widget'),
-                        subtitle: const Text(
-                          'Test the PopupWidget with PopupProvider',
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const PopupWidget(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
+                // Card(
+                //   child: Column(
+                //     children: [
+                //       ListTile(
+                //         leading: const Icon(Icons.person, color: Colors.blue),
+                //         title: const Text('Weight Human Page'),
+                //         subtitle: const Text('Test the WeightHumanPage'),
+                //         trailing: const Icon(Icons.arrow_forward_ios),
+                //         onTap: () {
+                //           Navigator.push(
+                //             context,
+                //             MaterialPageRoute(
+                //               builder: (context) => const WeightHumanPage(),
+                //             ),
+                //           );
+                //         },
+                //       ),
+                //       ListTile(
+                //         leading: const Icon(
+                //           Icons.control_camera,
+                //           color: Colors.green,
+                //         ),
+                //         title: const Text('Popup Widget'),
+                //         subtitle: const Text(
+                //           'Test the PopupWidget with PopupProvider',
+                //         ),
+                //         trailing: const Icon(Icons.arrow_forward_ios),
+                //         onTap: () {
+                //           Navigator.push(
+                //             context,
+                //             MaterialPageRoute(
+                //               builder: (context) => const PopupWidget(),
+                //             ),
+                //           );
+                //         },
+                //       ),
+                //     ],
+                //   ),
+                // ),
               ],
             ),
           ),
