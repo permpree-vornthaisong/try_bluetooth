@@ -2,253 +2,244 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'SettingProvider.dart';
+import 'CalibrationProvider.dart';
 
 class DisplayProvider extends ChangeNotifier {
-  // Message management
-  List<String> _receivedMessages = [];
-  bool _autoScroll = true;
-  int _maxMessages = 100;
+  // Weight display state
+  double _tareOffset = 0.0;
+  double? _currentWeight;
+  double? _currentRawValue;
+  String _rawDataText = 'No Data';
+  bool _isDataAvailable = false;
   
-  // Scroll controller
-  ScrollController? _scrollController;
-  
-  // Subscriptions
-  StreamSubscription? _settingProviderSubscription;
+  // Provider references
   SettingProvider? _settingProvider;
+  CalibrationProvider? _calibrationProvider;
   
-  // Track last processed values to avoid duplicates
+  // Track last processed values to avoid unnecessary updates
   Map<String, List<int>> _lastProcessedValues = {};
+  
+  // Timer for periodic updates
+  Timer? _updateTimer;
 
   // Getters
-  List<String> get receivedMessages => _receivedMessages;
-  bool get autoScroll => _autoScroll;
-  int get messageCount => _receivedMessages.length;
-  int get maxMessages => _maxMessages;
-
-  // Scroll controller getter/setter
-  ScrollController? get scrollController => _scrollController;
+  double get tareOffset => _tareOffset;
+  double? get currentWeight => _currentWeight;
+  double? get currentRawValue => _currentRawValue;
+  String get rawDataText => _rawDataText;
+  bool get isDataAvailable => _isDataAvailable;
+  bool get hasValidWeight => _currentWeight != null && _isDataAvailable;
   
-  void setScrollController(ScrollController controller) {
-    _scrollController = controller;
+  // Net weight (after tare)
+  double? get netWeight {
+    if (_currentWeight == null) return null;
+    double net = _currentWeight! - _tareOffset;
+    return net < 0 ? 0.0 : net;
   }
 
-  // Initialize with SettingProvider
-  void initializeWithSettingProvider(SettingProvider settingProvider) {
+  // Initialize with providers
+  void initializeWithProviders(
+    SettingProvider settingProvider,
+    CalibrationProvider calibrationProvider,
+  ) {
     _settingProvider = settingProvider;
+    _calibrationProvider = calibrationProvider;
     
-    // Listen to setting provider changes
-    _settingProvider!.addListener(_onSettingProviderChanged);
+    // Listen to provider changes
+    _settingProvider!.addListener(_onDataChanged);
+    _calibrationProvider!.addListener(_onDataChanged);
+    
+    // Start periodic update timer
+    _startUpdateTimer();
+    
+    // Initial data processing
+    _processCurrentData();
   }
 
-  void _onSettingProviderChanged() {
-    if (_settingProvider != null) {
-      _updateReceivedMessages(_settingProvider!);
-    }
+  void _startUpdateTimer() {
+    _updateTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      _processCurrentData();
+    });
   }
 
-  void _updateReceivedMessages(SettingProvider provider) {
+  void _onDataChanged() {
+    _processCurrentData();
+  }
+
+  void _processCurrentData() {
+    if (_settingProvider == null || _calibrationProvider == null) return;
+    
     bool hasNewData = false;
     
-    // Check for new data from all characteristics
-    provider.characteristicValues.forEach((uuid, value) {
-      if (value is List<int> && value.isNotEmpty) {
+    // Process BLE data
+    if (_settingProvider!.characteristicValues.isNotEmpty) {
+      final firstValue = _settingProvider!.characteristicValues.values.first;
+      
+      if (firstValue is List<int> && firstValue.isNotEmpty) {
         // Check if this is new data
+        String uuid = _settingProvider!.characteristicValues.keys.first;
+        
         if (!_lastProcessedValues.containsKey(uuid) || 
-            !listEquals(_lastProcessedValues[uuid], value)) {
+            !listEquals(_lastProcessedValues[uuid], firstValue)) {
           
-          _lastProcessedValues[uuid] = List<int>.from(value);
+          _lastProcessedValues[uuid] = List<int>.from(firstValue);
+          hasNewData = true;
           
           try {
-            String receivedText = String.fromCharCodes(value).trim();
-            String timestamp = _formatTimestamp();
+            String receivedText = String.fromCharCodes(firstValue).trim();
+            _rawDataText = receivedText;
+            _currentRawValue = _parseWeightFromText(receivedText);
             
-            // Try to parse weight value for better display
-            double? weightValue = _parseWeightFromText(receivedText);
-            String displayMessage;
-            
-            if (weightValue != null) {
-              displayMessage = '[$timestamp] Weight: ${weightValue.toStringAsFixed(2)} kg (Raw: $receivedText)';
+            // Calculate calibrated weight if possible
+            if (_currentRawValue != null && _calibrationProvider!.isCalibrated) {
+              _currentWeight = _calibrationProvider!.convertRawToWeight(_currentRawValue!);
+              _isDataAvailable = true;
             } else {
-              displayMessage = '[$timestamp] $receivedText';
-            }
-            
-            // Add only if it's different from the last message
-            if (_receivedMessages.isEmpty || _receivedMessages.last != displayMessage) {
-              _receivedMessages.add(displayMessage);
-              hasNewData = true;
-              
-              // Limit to last maxMessages to prevent memory issues
-              if (_receivedMessages.length > _maxMessages) {
-                _receivedMessages.removeAt(0);
-              }
+              _currentWeight = null;
+              _isDataAvailable = false;
             }
           } catch (e) {
-            // If not valid ASCII, show as hex
-            String hexData = value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-            String timestamp = _formatTimestamp();
-            String newMessage = '[$timestamp] HEX: $hexData';
-            
-            if (_receivedMessages.isEmpty || _receivedMessages.last != newMessage) {
-              _receivedMessages.add(newMessage);
-              hasNewData = true;
-              
-              if (_receivedMessages.length > _maxMessages) {
-                _receivedMessages.removeAt(0);
-              }
-            }
+            _rawDataText = 'Parse Error';
+            _currentRawValue = null;
+            _currentWeight = null;
+            _isDataAvailable = false;
           }
         }
       }
-    });
-
+    } else {
+      // No data available
+      if (_isDataAvailable) {
+        _rawDataText = 'No Data';
+        _currentRawValue = null;
+        _currentWeight = null;
+        _isDataAvailable = false;
+        hasNewData = true;
+      }
+    }
+    
     if (hasNewData) {
       notifyListeners();
-      if (_autoScroll) {
-        _scrollToBottom();
-      }
     }
   }
 
-  // Helper method to parse weight from text like "Weight: 7393.00 kg"
+  // Helper method to parse weight from text
   double? _parseWeightFromText(String text) {
     try {
-      // Look for pattern like "Weight: 7393.00 kg" or similar
-      RegExp weightPattern = RegExp(r'Weight:\s*([+-]?\d+\.?\d*)', caseSensitive: false);
+      RegExp weightPattern = RegExp(
+        r'Weight:\s*([+-]?\d+\.?\d*)',
+        caseSensitive: false,
+      );
       Match? match = weightPattern.firstMatch(text);
-      
+
       if (match != null) {
         return double.tryParse(match.group(1)!);
       }
-      
-      // If no "Weight:" pattern, try to extract any number from the text
+
       RegExp numberPattern = RegExp(r'([+-]?\d+\.?\d*)');
       match = numberPattern.firstMatch(text);
-      
+
       if (match != null) {
         return double.tryParse(match.group(1)!);
       }
-      
+
       return null;
     } catch (e) {
       return null;
     }
   }
 
-  String _formatTimestamp() {
-    final now = DateTime.now();
-    return '${now.hour.toString().padLeft(2, '0')}:'
-           '${now.minute.toString().padLeft(2, '0')}:'
-           '${now.second.toString().padLeft(2, '0')}';
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController != null && _scrollController!.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController!.animateTo(
-          _scrollController!.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      });
+  // Tare functionality
+  bool performTare() {
+    if (_currentWeight != null && _isDataAvailable) {
+      _tareOffset = _currentWeight!;
+      notifyListeners();
+      return true;
     }
+    return false;
   }
 
-  // Public methods
-  void clearAllMessages() {
-    _receivedMessages.clear();
-    _lastProcessedValues.clear();
+  void clearTare() {
+    _tareOffset = 0.0;
     notifyListeners();
   }
 
-  void toggleAutoScroll() {
-    _autoScroll = !_autoScroll;
-    notifyListeners();
-    
-    if (_autoScroll) {
-      _scrollToBottom();
+  // Weight display methods
+  String getFormattedWeight({int precision = 1}) {
+    if (netWeight != null) {
+      return '${netWeight!.toStringAsFixed(precision)} kg';
     }
+    return '--.- kg';
   }
 
-  void setMaxMessages(int maxMessages) {
-    _maxMessages = maxMessages;
-    
-    // Trim existing messages if needed
-    while (_receivedMessages.length > _maxMessages) {
-      _receivedMessages.removeAt(0);
+  String getFormattedRawValue({int precision = 2}) {
+    if (_currentRawValue != null) {
+      return _currentRawValue!.toStringAsFixed(precision);
     }
-    
-    notifyListeners();
+    return '--.-';
   }
 
-  void scrollToBottom() {
-    _scrollToBottom();
-  }
-
-  // Add manual message (for testing or custom input)
-  void addManualMessage(String message) {
-    String timestamp = _formatTimestamp();
-    String newMessage = '[$timestamp] MANUAL: $message';
-    
-    _receivedMessages.add(newMessage);
-    
-    if (_receivedMessages.length > _maxMessages) {
-      _receivedMessages.removeAt(0);
+  String getFormattedCalibratedWeight({int precision = 1}) {
+    if (_currentWeight != null) {
+      return '${(_currentWeight! + _tareOffset).toStringAsFixed(precision)} kg';
     }
-    
-    notifyListeners();
-    
-    if (_autoScroll) {
-      _scrollToBottom();
+    return '--.- kg';
+  }
+
+  String getFormattedTareOffset({int precision = 1}) {
+    return '${_tareOffset.toStringAsFixed(precision)} kg';
+  }
+
+  // Status checks
+  bool get isConnected => _settingProvider?.connectedDevice != null;
+  bool get isCalibrated => _calibrationProvider?.isCalibrated ?? false;
+  
+  String get connectionStatus => _settingProvider?.connectionStatus ?? 'Disconnected';
+  
+  String getDeviceName() {
+    if (_settingProvider?.connectedDevice != null) {
+      return _settingProvider!.getBLEDeviceDisplayName(_settingProvider!.connectedDevice!);
     }
+    return 'No Device';
   }
 
-  // Filter messages by type
-  List<String> getMessagesByType(String type) {
-    switch (type.toLowerCase()) {
-      case 'hex':
-        return _receivedMessages.where((msg) => msg.contains('HEX:')).toList();
-      case 'ascii':
-        return _receivedMessages.where((msg) => !msg.contains('HEX:') && !msg.contains('MANUAL:')).toList();
-      case 'manual':
-        return _receivedMessages.where((msg) => msg.contains('MANUAL:')).toList();
-      default:
-        return _receivedMessages;
-    }
+  int get calibrationPointsCount => _calibrationProvider?.calibrationPoints.length ?? 0;
+
+  // Validation methods
+  bool isWeightInRange(double minWeight, double maxWeight) {
+    if (netWeight == null) return false;
+    return netWeight! >= minWeight && netWeight! <= maxWeight;
   }
 
-  // Search messages
-  List<String> searchMessages(String query) {
-    if (query.isEmpty) return _receivedMessages;
+  bool isWeightStable(double threshold, List<double> recentReadings) {
+    if (recentReadings.length < 2) return false;
     
-    return _receivedMessages.where((msg) => 
-      msg.toLowerCase().contains(query.toLowerCase())
-    ).toList();
-  }
-
-  // Export messages as string
-  String exportMessages() {
-    return _receivedMessages.join('\n');
-  }
-
-  // Get statistics
-  Map<String, int> getMessageStats() {
-    int hexCount = getMessagesByType('hex').length;
-    int asciiCount = getMessagesByType('ascii').length;
-    int manualCount = getMessagesByType('manual').length;
+    double minWeight = recentReadings.reduce((a, b) => a < b ? a : b);
+    double maxWeight = recentReadings.reduce((a, b) => a > b ? a : b);
     
+    return (maxWeight - minWeight) <= threshold;
+  }
+
+  // Debug information
+  Map<String, dynamic> getDebugInfo() {
     return {
-      'total': _receivedMessages.length,
-      'hex': hexCount,
-      'ascii': asciiCount,
-      'manual': manualCount,
+      'isConnected': isConnected,
+      'isCalibrated': isCalibrated,
+      'isDataAvailable': _isDataAvailable,
+      'currentWeight': _currentWeight,
+      'netWeight': netWeight,
+      'tareOffset': _tareOffset,
+      'rawValue': _currentRawValue,
+      'rawText': _rawDataText,
+      'deviceName': getDeviceName(),
+      'calibrationPoints': calibrationPointsCount,
     };
   }
 
   @override
   void dispose() {
-    _settingProviderSubscription?.cancel();
-    _settingProvider?.removeListener(_onSettingProviderChanged);
-    _scrollController?.dispose();
+    _updateTimer?.cancel();
+    _settingProvider?.removeListener(_onDataChanged);
+    _calibrationProvider?.removeListener(_onDataChanged);
     super.dispose();
   }
 }

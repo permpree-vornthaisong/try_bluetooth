@@ -5,7 +5,9 @@ import 'package:try_bluetooth/pages/SettingsPage.dart';
 import 'package:try_bluetooth/pages/DisplayPage.dart';
 import 'package:try_bluetooth/pages/UserListPage.dart';
 import 'package:try_bluetooth/pages/WeightHumanPage.dart';
+import 'package:try_bluetooth/pages/popup_widget.dart';
 import 'package:try_bluetooth/providers/CRUDSQLiteProvider.dart' show CRUDSQLiteProvider;
+import 'package:try_bluetooth/providers/CRUD_Services_Providers.dart';
 import 'package:try_bluetooth/providers/SaveAnimalProvider.dart';
 import 'package:try_bluetooth/providers/SaveHumanProvider.dart';
 import 'package:try_bluetooth/providers/SaveObjectProvider.dart';
@@ -86,6 +88,11 @@ class MyApp extends StatelessWidget {
             provider.initDatabase('app_database'); // Initialize database
             return provider;
           },
+        ),
+       ChangeNotifierProvider(
+          create: (context) => CRUDServicesProvider(
+            Provider.of<CRUDSQLiteProvider>(context, listen: false),
+          ),
         ),
       ],
       child: MaterialApp(
@@ -191,11 +198,11 @@ class _NavigationExampleState extends State<NavigationExample> {
   Widget _buildCurrentPage(BuildContext context, ThemeData theme, int currentPageIndex) {
     switch (currentPageIndex) {
       case 0:
-        return UserListPage(); // BLE Data Display page
+        return ExampleUsage(); // BLE Data Display page
       case 1:
         return const CalibrationWidget(); // Weight Calibration page
       case 2:
-        return CalibrationZeroPage(); // Factory Calibration page
+        return CalibrationWidget(); // Weight Calibration page
       case 3:
         return _buildNotificationsPage();
       case 4:
