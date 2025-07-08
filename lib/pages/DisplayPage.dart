@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/providers/CRUD_Services_Providers.dart';
 import '../providers/SettingProvider.dart';
-import '../providers/CalibrationProvider.dart';
 import '../providers/DisplayProvider.dart';
 
 class DisplayPage extends StatefulWidget {
@@ -28,15 +27,8 @@ class _DisplayPageState extends State<DisplayPage> {
         context,
         listen: false,
       );
-      final calibrationProvider = Provider.of<CalibrationProvider>(
-        context,
-        listen: false,
-      );
 
-      displayProvider.initializeWithProviders(
-        settingProvider,
-        calibrationProvider,
-      );
+      displayProvider.initializeWithProviders(settingProvider);
     });
   }
 
@@ -49,12 +41,14 @@ class _DisplayPageState extends State<DisplayPage> {
       ),
       body: Consumer<DisplayProvider>(
         builder: (context, displayProvider, child) {
-          return Column(
-            children: [
-              _buildConnectionStatus(displayProvider),
-              Expanded(child: _buildWeightDisplay(displayProvider)),
-              _buildTareButton(displayProvider),
-            ],
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                _buildConnectionStatus(displayProvider),
+                Expanded(child: _buildWeightDisplay(displayProvider)),
+                _buildTareButton(displayProvider),
+              ],
+            ),
           );
         },
       ),
@@ -90,25 +84,6 @@ class _DisplayPageState extends State<DisplayPage> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                 ],
-              ),
-            ),
-            // Calibration Status
-            const SizedBox(width: 16),
-            Icon(
-              displayProvider.isCalibrated ? Icons.check_circle : Icons.warning,
-              color:
-                  displayProvider.isCalibrated ? Colors.green : Colors.orange,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              displayProvider.isCalibrated
-                  ? 'Calibrated (${displayProvider.calibrationPointsCount})'
-                  : 'Not Calibrated',
-              style: TextStyle(
-                fontSize: 12,
-                color:
-                    displayProvider.isCalibrated ? Colors.green : Colors.orange,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -158,12 +133,6 @@ class _DisplayPageState extends State<DisplayPage> {
                 ] else ...[
                   Icon(Icons.scale, size: 64, color: Colors.grey[400]),
                   const SizedBox(height: 16),
-                  Text(
-                    displayProvider.isCalibrated
-                        ? 'รอข้อมูลน้ำหนัก'
-                        : 'ยังไม่ได้ปรับเทียบ',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                  ),
                 ],
               ],
             ),
@@ -173,7 +142,7 @@ class _DisplayPageState extends State<DisplayPage> {
           TextButton(
             onPressed: () async {
               // รับ CRUD Service จาก Provider
-              final crudService = Provider.of<CRUDServicesProvider>(
+              final crudService = Provider.of<CRUD_Services_Provider>(
                 context,
                 listen: false,
               );

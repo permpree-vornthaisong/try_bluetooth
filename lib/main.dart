@@ -1,33 +1,19 @@
 // ========== main.dart ==========
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:try_bluetooth/pages/CalibrationZeroPage.dart';
 import 'package:try_bluetooth/pages/DisplayAutoSaveWeightPage.dart';
 import 'package:try_bluetooth/pages/SettingsPage.dart';
-import 'package:try_bluetooth/pages/DisplayPage.dart';
-import 'package:try_bluetooth/pages/UserListPage.dart';
-import 'package:try_bluetooth/pages/WeightHumanPage.dart';
-import 'package:try_bluetooth/pages/DisplayMainPage.dart';
-import 'package:try_bluetooth/providers/CRUDSQLiteProvider.dart'
-    show CRUDSQLiteProvider;
+import 'package:try_bluetooth/pages/TestCreate.dart';
 import 'package:try_bluetooth/providers/CRUD_Services_Providers.dart';
 import 'package:try_bluetooth/providers/DisplayMainProvider.dart';
-import 'package:try_bluetooth/providers/SaveAnimalProvider.dart';
-import 'package:try_bluetooth/providers/SaveHumanProvider.dart';
-import 'package:try_bluetooth/providers/SaveObjectProvider.dart';
-import 'package:try_bluetooth/providers/WeightHumanProvider.dart';
-import 'package:try_bluetooth/widgets/CalibrationWidget.dart';
+import 'package:try_bluetooth/providers/AutoSaveProviderServices.dart';
+import 'package:try_bluetooth/providers/GenericSaveService.dart';
 import 'package:try_bluetooth/providers/NavigationBar1Provider.dart';
 import 'package:try_bluetooth/providers/SettingProvider.dart';
 import 'package:try_bluetooth/providers/DisplayProvider.dart';
-import 'package:try_bluetooth/providers/CalibrationProvider.dart';
-import 'package:try_bluetooth/providers/FactoryCalibrationProvider.dart';
-import 'package:try_bluetooth/providers/calibration_easy_provider.dart';
 
 void main() async {
-  // ✅ เพิ่มการเตรียมใช้งาน async
   WidgetsFlutterBinding.ensureInitialized();
-
   runApp(const MyApp());
 }
 
@@ -38,92 +24,65 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // ✅ 1. Navigation Provider
         ChangeNotifierProvider(create: (context) => NavigationBar1Provider()),
 
-        // ✅ 2. BLE & Connection Providers
         ChangeNotifierProvider(create: (context) => SettingProvider()),
 
-        // ✅ 3. Display Provider
         ChangeNotifierProvider(create: (context) => DisplayProvider()),
 
-        // ✅ 4. Calibration Providers
-        ChangeNotifierProvider(create: (context) => CalibrationProvider()),
-        ChangeNotifierProvider(
-          create: (context) => FactoryCalibrationProvider(),
-        ),
-        ChangeNotifierProvider(create: (context) => CalibrationEasy()),
-
-        // ✅ 5. Database Providers - เรียก initDatabase() เฉพาะที่นี่
-        ChangeNotifierProvider(
-          create: (_) {
-            final provider = SaveHumanProvider();
-            provider.initDatabase(); // Initialize ครั้งเดียวที่นี่
-            return provider;
-          },
-        ),
-        ChangeNotifierProvider(
-          create: (_) {
-            final provider = SaveObjectProvider();
-            provider.initDatabase();
-            return provider;
-          },
-        ),
-        ChangeNotifierProvider(
-          create: (_) {
-            final provider = SaveAnimalProvider();
-            provider.initDatabase();
-            return provider;
-          },
-        ),
-
-        // ✅ 6. Weight Providers
-        ChangeNotifierProvider(
-          create: (_) {
-            final provider = WeightHumanProvider();
-            provider.initialize();
-            return provider;
-          },
-        ),
-
-        // ✅ 7. CRUD Provider - เพิ่ม initialization
-        ChangeNotifierProvider(
-          create: (_) {
-            final provider = CRUDSQLiteProvider();
-            provider.initDatabase('app_database'); // Initialize database
-            return provider;
-          },
-        ),
-        ChangeNotifierProvider(
-          create:
-              (context) => CRUDServicesProvider(
-                Provider.of<CRUDSQLiteProvider>(context, listen: false),
-              ),
-        ),
-
-        // ✅ 8. PopupProvider - ใช้ ProxyProvider เพื่อรับ dependencies
+        ChangeNotifierProvider(create: (_) => DisplayMainProvider()),
         ChangeNotifierProxyProvider2<
-          SettingProvider,
-          DisplayProvider,
-          DisplayMainProvider
+          CRUD_Services_Provider,
+          DisplayMainProvider,
+          GenericSaveService
         >(
-          create: (_) => DisplayMainProvider(),
-          update: (context, settingProvider, displayProvider, previous) {
-            // วิธีที่ถูกต้อง - แยกขั้นตอนออกมา
+          create: (context) {
+            final crudServices = Provider.of<CRUD_Services_Provider>(
+              context,
+              listen: false,
+            );
+            final displayProvider = Provider.of<DisplayMainProvider>(
+              context,
+              listen: false,
+            );
+            return GenericSaveService(crudServices, displayProvider);
+          },
+          update: (context, crudServices, displayProvider, previous) {
+            return previous ??
+                GenericSaveService(crudServices, displayProvider);
+          },
+        ),
+        ChangeNotifierProxyProvider2<
+          CRUD_Services_Provider,
+          DisplayMainProvider,
+          AutoSaveProviderServices
+        >(
+          create: (context) {
+            debugPrint('🔧 Creating AutoSaveProviderServices...');
+            final crudServices = Provider.of<CRUD_Services_Provider>(
+              context,
+              listen: false,
+            );
+            final displayProvider = Provider.of<DisplayMainProvider>(
+              context,
+              listen: false,
+            );
+
+            debugPrint(
+              '📍 CRUD Services ready: ${crudServices.isDatabaseReady}',
+            );
+            debugPrint(
+              '📍 Display Provider ready: ${displayProvider.isConnected}',
+            );
+
+            return AutoSaveProviderServices(crudServices, displayProvider);
+          },
+          update: (context, crudServices, displayProvider, previous) {
             if (previous != null) {
-              previous.initializeWithProviders(
-                settingProvider,
-                displayProvider,
-              );
               return previous;
-            } else {
-              final newProvider = DisplayMainProvider();
-              newProvider.initializeWithProviders(
-                settingProvider,
-                displayProvider,
-              );
-              return newProvider;
             }
+            debugPrint('🔄 Updating AutoSaveProviderServices...');
+            return AutoSaveProviderServices(crudServices, displayProvider);
           },
         ),
       ],
@@ -147,51 +106,67 @@ class _NavigationExampleState extends State<NavigationExample> {
   @override
   void initState() {
     super.initState();
-
-    // ✅ Initialize providers after widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeProviders();
     });
   }
 
-  // ✅ เชื่อมต่อ providers กันหลังจาก build แล้ว
   void _initializeProviders() {
     try {
+      debugPrint('🚀 Starting provider initialization...');
+
       final settingProvider = Provider.of<SettingProvider>(
         context,
         listen: false,
       );
-      final calibrationEasy = Provider.of<CalibrationEasy>(
+      final displayProvider = Provider.of<DisplayProvider>(
         context,
         listen: false,
       );
-      final saveHumanProvider = Provider.of<SaveHumanProvider>(
+      final displayMainProvider = Provider.of<DisplayMainProvider>(
         context,
         listen: false,
       );
-      final popupProvider = Provider.of<DisplayMainProvider>(context, listen: false);
-
-      // เชื่อมต่อ CalibrationEasy กับ SettingProvider
-      calibrationEasy.connectToSettingProvider(settingProvider);
-
-      // Initialize CalibrationEasy (ไม่ใช่ database)
-      calibrationEasy.initialize();
-
-      // ✅ PopupProvider จะถูก initialize อัตโนมัติผ่าน ProxyProvider แล้ว
-      print('✅ PopupProvider initialized: ${popupProvider.isConnected}');
-      print('✅ All providers initialized and connected successfully');
-      print(
-        '✅ SaveHumanProvider records: ${saveHumanProvider.savedWeights.length}',
+      final crudServices = Provider.of<CRUD_Services_Provider>(
+        context,
+        listen: false,
       );
+      final autoSaveService = Provider.of<AutoSaveProviderServices>(
+        context,
+        listen: false,
+      );
+
+      debugPrint('📋 Provider status check:');
+      debugPrint('  - SettingProvider: Ready');
+      debugPrint('  - DisplayProvider: Ready');
+      debugPrint('  - CalibrationEasy: Ready');
+      debugPrint('  - DisplayMainProvider: Ready');
+      debugPrint(
+        '  - CRUDServices: ${crudServices.isDatabaseReady ? "Ready" : "Not Ready"}',
+      );
+      debugPrint(
+        '  - AutoSaveService: ${autoSaveService.isInitialized ? "Ready" : "Not Ready"}',
+      );
+
+      // Initialize DisplayMainProvider
+      displayMainProvider.initializeWithProviders(
+        settingProvider,
+        displayProvider,
+      );
+      debugPrint('✅ DisplayMainProvider initialized');
+
+      // Initialize CalibrationEasy
+
+      debugPrint('✅ CalibrationEasy initialized');
+
+      debugPrint('✅ All providers initialized successfully');
     } catch (e) {
-      print('❌ Error initializing providers: $e');
+      debugPrint('❌ Error initializing providers: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     return Scaffold(
       bottomNavigationBar: Consumer<NavigationBar1Provider>(
         builder: (context, navigationProvider, child) {
@@ -203,20 +178,17 @@ class _NavigationExampleState extends State<NavigationExample> {
             selectedIndex: navigationProvider.currentPageIndex,
             destinations: const <Widget>[
               NavigationDestination(
-                selectedIcon: Icon(Icons.display_settings),
-                icon: Icon(Icons.display_settings_outlined),
-                label: 'Display',
+                selectedIcon: Icon(Icons.auto_mode),
+                icon: Icon(Icons.auto_mode_outlined),
+                label: 'Auto Save',
               ),
               NavigationDestination(
-                icon: Badge(child: Icon(Icons.factory)),
-                label: 'DataBase',
+                icon: Icon(Icons.tune),
+                label: 'Calibration',
               ),
+              NavigationDestination(icon: Icon(Icons.info), label: 'Status'),
               NavigationDestination(
-                icon: Badge(child: Icon(Icons.notifications_sharp)),
-                label: 'Notifications',
-              ),
-              NavigationDestination(
-                icon: Badge(label: Text('BLE'), child: Icon(Icons.settings)),
+                icon: Icon(Icons.settings),
                 label: 'Settings',
               ),
             ],
@@ -225,188 +197,173 @@ class _NavigationExampleState extends State<NavigationExample> {
       ),
       body: Consumer<NavigationBar1Provider>(
         builder: (context, navigationProvider, child) {
-          return _buildCurrentPage(
-            context,
-            theme,
-            navigationProvider.currentPageIndex,
-          );
+          return _buildCurrentPage(navigationProvider.currentPageIndex);
         },
       ),
     );
   }
 
-  Widget _buildCurrentPage(
-    BuildContext context,
-    ThemeData theme,
-    int currentPageIndex,
-  ) {
+  Widget _buildCurrentPage(int currentPageIndex) {
     switch (currentPageIndex) {
       case 0:
-        return DisplayAutoSaveWeightPage(); //PopupWidget(); // BLE Data Display page
+        return TestCreateWidget(
+          saveService: Provider.of<GenericSaveService>(context),
+        );
       case 1:
-        return const CalibrationWidget(); // Weight Calibration page
+        return DisplayAutoSaveWeightPage();
       case 2:
-        return _buildNotificationsPage();
+        return _buildStatusPage();
       case 3:
-        return const SettingsPage(); // BLE Settings page
+        return SettingsPage();
       default:
-        return const PopupWidget();
+        return DisplayAutoSaveWeightPage();
     }
   }
 
-  Widget _buildNotificationsPage() {
-    return Consumer5<
-      SettingProvider,
-      CalibrationEasy,
-      CalibrationProvider,
-      SaveHumanProvider,
-      DisplayMainProvider
+  Widget _buildStatusPage() {
+    return Consumer3<
+      DisplayMainProvider,
+      CRUD_Services_Provider,
+      AutoSaveProviderServices
     >(
       builder: (
         context,
-        settingProvider,
-        calibrationEasy,
-        calibrationProvider,
-        saveHumanProvider,
-        popupProvider,
+        displayMainProvider,
+        crudServices,
+        autoSaveService,
         child,
       ) {
         return SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
-              children: <Widget>[
-                // ✅ PopupProvider Status Card - เพิ่มใหม่
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Page Header
+                const Text(
+                  'System Status',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+
+                // Connection Status Card
                 Card(
                   color: Colors.green.shade50,
                   child: ListTile(
                     leading: Icon(
-                      popupProvider.isConnected
+                      displayMainProvider.isConnected
                           ? Icons.bluetooth_connected
                           : Icons.bluetooth_disabled,
                       color:
-                          popupProvider.isConnected ? Colors.green : Colors.red,
+                          displayMainProvider.isConnected
+                              ? Colors.green
+                              : Colors.red,
                     ),
-                    title: const Text('PopupProvider Status'),
+                    title: const Text('Connection Status'),
                     subtitle: Text(
-                      'Connection: ${popupProvider.connectionStatus}\n'
-                      'Device: ${popupProvider.deviceName}\n'
-                      'Current Weight: ${popupProvider.formattedWeight} kg\n'
-                      'Tare Operations: ${popupProvider.tareOperations}\n'
-                      'Zero Operations: ${popupProvider.zeroOperations}',
+                      'Device: ${displayMainProvider.deviceName ?? "Not connected"}\n'
+                      'Weight: ${displayMainProvider.formattedWeight} kg\n'
+                      'Status: ${displayMainProvider.connectionStatus}',
                     ),
-                    trailing:
-                        popupProvider.isProcessing
-                            ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : Icon(
-                              popupProvider.isConnected
-                                  ? Icons.check_circle
-                                  : Icons.error,
-                              color:
-                                  popupProvider.isConnected
-                                      ? Colors.green
-                                      : Colors.red,
-                            ),
+                    trailing: Icon(
+                      displayMainProvider.isConnected
+                          ? Icons.check_circle
+                          : Icons.error,
+                      color:
+                          displayMainProvider.isConnected
+                              ? Colors.green
+                              : Colors.red,
+                    ),
                   ),
                 ),
 
-                // ✅ Test PopupProvider Functions
-                // Card(
-                //   color: Colors.blue.shade50,
-                //   child: Column(
-                //     children: [
-                //       ListTile(
-                //         leading: const Icon(Icons.scale, color: Colors.blue),
-                //         title: const Text('Test PopupProvider'),
-                //         subtitle: const Text('Test Tare and Zero functions'),
-                //       ),
-                //       Padding(
-                //         padding: const EdgeInsets.all(16.0),
-                //         child: Row(
-                //           children: [
-                //             Expanded(
-                //               child: ElevatedButton(
-                //                 onPressed:
-                //                     popupProvider.isProcessing
-                //                         ? null
-                //                         : () async {
-                //                           final result =
-                //                               await popupProvider.toggleTare();
-                //                           if (context.mounted) {
-                //                             ScaffoldMessenger.of(
-                //                               context,
-                //                             ).showSnackBar(
-                //                               SnackBar(
-                //                                 content: Text(result.message),
-                //                                 backgroundColor:
-                //                                     result.success
-                //                                         ? Colors.blue
-                //                                         : Colors.red,
-                //                               ),
-                //                             );
-                //                           }
-                //                         },
-                //                 child: Text(
-                //                   popupProvider.hasTareOffset
-                //                       ? 'Clear Tare'
-                //                       : 'Set Tare',
-                //                 ),
-                //               ),
-                //             ),
-                //             const SizedBox(width: 8),
-                //             Expanded(
-                //               child: ElevatedButton(
-                //                 onPressed:
-                //                     popupProvider.isProcessing
-                //                         ? null
-                //                         : () async {
-                //                           final result =
-                //                               await popupProvider
-                //                                   .sendZeroCommand();
-                //                           if (context.mounted) {
-                //                             ScaffoldMessenger.of(
-                //                               context,
-                //                             ).showSnackBar(
-                //                               SnackBar(
-                //                                 content: Text(result.message),
-                //                                 backgroundColor:
-                //                                     result.success
-                //                                         ? Colors.orange
-                //                                         : Colors.red,
-                //                               ),
-                //                             );
-                //                           }
-                //                         },
-                //                 child: const Text('Send Zero'),
-                //               ),
-                //             ),
-                //           ],
-                //         ),
-                //       ),
-                //     ],
-                //   ),
-                // ),
+                const SizedBox(height: 8),
 
-                // ✅ Database Status Card
+                // Auto Save Status Card
                 Card(
+                  color: Colors.purple.shade50,
                   child: ListTile(
                     leading: Icon(
-                      saveHumanProvider.savedWeights.isNotEmpty
+                      autoSaveService.isAutoSaveActive
+                          ? Icons.auto_mode
+                          : Icons.auto_mode_outlined,
+                      color:
+                          autoSaveService.isAutoSaveActive
+                              ? Colors.purple
+                              : Colors.grey,
+                    ),
+                    title: const Text('Auto Save Status'),
+                    subtitle: Text(
+                      'Initialized: ${autoSaveService.isInitialized ? 'Yes' : 'No'}\n'
+                      'Active: ${autoSaveService.isAutoSaveActive ? 'Yes' : 'No'}\n'
+                      'Auto Saves: ${autoSaveService.totalAutoSaves}\n'
+                      'Manual Saves: ${autoSaveService.totalManualSaves}\n'
+                      'Waiting for Zero: ${autoSaveService.waitingForZeroWeight ? 'Yes' : 'No'}',
+                    ),
+                    trailing: Icon(
+                      autoSaveService.isInitialized
+                          ? Icons.check_circle
+                          : Icons.error,
+                      color:
+                          autoSaveService.isInitialized
+                              ? Colors.green
+                              : Colors.red,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Database Status Card
+                Card(
+                  color: Colors.blue.shade50,
+                  child: ListTile(
+                    leading: Icon(
+                      crudServices.isDatabaseReady
                           ? Icons.storage
                           : Icons.storage_outlined,
-                      color: Colors.purple,
+                      color:
+                          crudServices.isDatabaseReady
+                              ? Colors.blue
+                              : Colors.grey,
                     ),
                     title: const Text('Database Status'),
                     subtitle: Text(
-                      'Saved Records: ${saveHumanProvider.savedWeights.length}\n'
-                      'Loading: ${saveHumanProvider.isLoading ? 'Yes' : 'No'}',
+                      'Ready: ${crudServices.isDatabaseReady ? 'Yes' : 'No'}\n'
+                      'Total Operations: ${crudServices.totalOperations}\n'
+                      'Last Operation: ${crudServices.lastOperation ?? 'None'}',
+                    ),
+                    trailing: Icon(
+                      crudServices.isDatabaseReady
+                          ? Icons.check_circle
+                          : Icons.error,
+                      color:
+                          crudServices.isDatabaseReady
+                              ? Colors.green
+                              : Colors.red,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // System Status
+                Card(
+                  color: Colors.orange.shade50,
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.system_security_update_good,
+                      color: Colors.orange,
+                    ),
+                    title: const Text('System Status'),
+                    subtitle: Text(
+                      'Processing: ${crudServices.isProcessing ? 'Yes' : 'No'}\n'
+                      'AutoSave Processing: ${autoSaveService.isProcessing ? 'Yes' : 'No'}\n'
+                      'Last Error: ${crudServices.lastError ?? autoSaveService.lastError ?? 'None'}',
                     ),
                     trailing:
-                        saveHumanProvider.isLoading
+                        (crudServices.isProcessing ||
+                                autoSaveService.isProcessing)
                             ? const SizedBox(
                               width: 20,
                               height: 20,
@@ -419,81 +376,51 @@ class _NavigationExampleState extends State<NavigationExample> {
                   ),
                 ),
 
-                // ✅ Quick Actions
-                // Card(
-                //   child: Column(
-                //     children: [
-                //       ListTile(
-                //         leading: const Icon(Icons.person, color: Colors.blue),
-                //         title: const Text('Weight Human Page'),
-                //         subtitle: const Text('Test the WeightHumanPage'),
-                //         trailing: const Icon(Icons.arrow_forward_ios),
-                //         onTap: () {
-                //           Navigator.push(
-                //             context,
-                //             MaterialPageRoute(
-                //               builder: (context) => const WeightHumanPage(),
-                //             ),
-                //           );
-                //         },
-                //       ),
-                //       ListTile(
-                //         leading: const Icon(
-                //           Icons.control_camera,
-                //           color: Colors.green,
-                //         ),
-                //         title: const Text('Popup Widget'),
-                //         subtitle: const Text(
-                //           'Test the PopupWidget with PopupProvider',
-                //         ),
-                //         trailing: const Icon(Icons.arrow_forward_ios),
-                //         onTap: () {
-                //           Navigator.push(
-                //             context,
-                //             MaterialPageRoute(
-                //               builder: (context) => const PopupWidget(),
-                //             ),
-                //           );
-                //         },
-                //       ),
-                //     ],
-                //   ),
-                // ),
+                const SizedBox(height: 16),
+
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          // Reinitialize AutoSave Service
+                          autoSaveService.reinitialize();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('AutoSave Service reinitialized'),
+                              backgroundColor: Colors.blue,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reinit AutoSave'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          // Clear statistics
+                          autoSaveService.resetStatistics();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Statistics cleared'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.clear_all),
+                        label: const Text('Clear Stats'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.indigo.shade200),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.indigo[600], size: 20),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.indigo[800],
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
   }
 }

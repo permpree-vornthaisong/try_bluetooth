@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'SettingProvider.dart';
-import 'CalibrationProvider.dart';
 
 class DisplayProvider extends ChangeNotifier {
   // Weight display state
@@ -11,14 +10,13 @@ class DisplayProvider extends ChangeNotifier {
   double? _currentRawValue;
   String _rawDataText = 'No Data';
   bool _isDataAvailable = false;
-  
+
   // Provider references
   SettingProvider? _settingProvider;
-  CalibrationProvider? _calibrationProvider;
-  
+
   // Track last processed values to avoid unnecessary updates
   Map<String, List<int>> _lastProcessedValues = {};
-  
+
   // Timer for periodic updates
   Timer? _updateTimer;
 
@@ -29,7 +27,7 @@ class DisplayProvider extends ChangeNotifier {
   String get rawDataText => _rawDataText;
   bool get isDataAvailable => _isDataAvailable;
   bool get hasValidWeight => _currentWeight != null && _isDataAvailable;
-  
+
   // Net weight (after tare)
   double? get netWeight {
     if (_currentWeight == null) return null;
@@ -38,20 +36,15 @@ class DisplayProvider extends ChangeNotifier {
   }
 
   // Initialize with providers
-  void initializeWithProviders(
-    SettingProvider settingProvider,
-    CalibrationProvider calibrationProvider,
-  ) {
+  void initializeWithProviders(SettingProvider settingProvider) {
     _settingProvider = settingProvider;
-    _calibrationProvider = calibrationProvider;
-    
+
     // Listen to provider changes
     _settingProvider!.addListener(_onDataChanged);
-    _calibrationProvider!.addListener(_onDataChanged);
-    
+
     // Start periodic update timer
     _startUpdateTimer();
-    
+
     // Initial data processing
     _processCurrentData();
   }
@@ -67,37 +60,27 @@ class DisplayProvider extends ChangeNotifier {
   }
 
   void _processCurrentData() {
-    if (_settingProvider == null || _calibrationProvider == null) return;
-    
+    if (_settingProvider == null) return;
+
     bool hasNewData = false;
-    
+
     // Process BLE data
     if (_settingProvider!.characteristicValues.isNotEmpty) {
       final firstValue = _settingProvider!.characteristicValues.values.first;
-      
+
       if (firstValue is List<int> && firstValue.isNotEmpty) {
         // Check if this is new data
         String uuid = _settingProvider!.characteristicValues.keys.first;
-        
-        if (!_lastProcessedValues.containsKey(uuid) || 
+
+        if (!_lastProcessedValues.containsKey(uuid) ||
             !listEquals(_lastProcessedValues[uuid], firstValue)) {
-          
           _lastProcessedValues[uuid] = List<int>.from(firstValue);
           hasNewData = true;
-          
+
           try {
             String receivedText = String.fromCharCodes(firstValue).trim();
             _rawDataText = receivedText;
             _currentRawValue = _parseWeightFromText(receivedText);
-            
-            // Calculate calibrated weight if possible
-            if (_currentRawValue != null && _calibrationProvider!.isCalibrated) {
-              _currentWeight = _calibrationProvider!.convertRawToWeight(_currentRawValue!);
-              _isDataAvailable = true;
-            } else {
-              _currentWeight = null;
-              _isDataAvailable = false;
-            }
           } catch (e) {
             _rawDataText = 'Parse Error';
             _currentRawValue = null;
@@ -116,7 +99,7 @@ class DisplayProvider extends ChangeNotifier {
         hasNewData = true;
       }
     }
-    
+
     if (hasNewData) {
       notifyListeners();
     }
@@ -191,18 +174,18 @@ class DisplayProvider extends ChangeNotifier {
 
   // Status checks
   bool get isConnected => _settingProvider?.connectedDevice != null;
-  bool get isCalibrated => _calibrationProvider?.isCalibrated ?? false;
-  
-  String get connectionStatus => _settingProvider?.connectionStatus ?? 'Disconnected';
-  
+
+  String get connectionStatus =>
+      _settingProvider?.connectionStatus ?? 'Disconnected';
+
   String getDeviceName() {
     if (_settingProvider?.connectedDevice != null) {
-      return _settingProvider!.getBLEDeviceDisplayName(_settingProvider!.connectedDevice!);
+      return _settingProvider!.getBLEDeviceDisplayName(
+        _settingProvider!.connectedDevice!,
+      );
     }
     return 'No Device';
   }
-
-  int get calibrationPointsCount => _calibrationProvider?.calibrationPoints.length ?? 0;
 
   // Validation methods
   bool isWeightInRange(double minWeight, double maxWeight) {
@@ -212,10 +195,10 @@ class DisplayProvider extends ChangeNotifier {
 
   bool isWeightStable(double threshold, List<double> recentReadings) {
     if (recentReadings.length < 2) return false;
-    
+
     double minWeight = recentReadings.reduce((a, b) => a < b ? a : b);
     double maxWeight = recentReadings.reduce((a, b) => a > b ? a : b);
-    
+
     return (maxWeight - minWeight) <= threshold;
   }
 
@@ -223,7 +206,6 @@ class DisplayProvider extends ChangeNotifier {
   Map<String, dynamic> getDebugInfo() {
     return {
       'isConnected': isConnected,
-      'isCalibrated': isCalibrated,
       'isDataAvailable': _isDataAvailable,
       'currentWeight': _currentWeight,
       'netWeight': netWeight,
@@ -231,7 +213,6 @@ class DisplayProvider extends ChangeNotifier {
       'rawValue': _currentRawValue,
       'rawText': _rawDataText,
       'deviceName': getDeviceName(),
-      'calibrationPoints': calibrationPointsCount,
     };
   }
 
@@ -239,7 +220,6 @@ class DisplayProvider extends ChangeNotifier {
   void dispose() {
     _updateTimer?.cancel();
     _settingProvider?.removeListener(_onDataChanged);
-    _calibrationProvider?.removeListener(_onDataChanged);
     super.dispose();
   }
 }

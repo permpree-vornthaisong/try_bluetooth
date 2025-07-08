@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'CRUDSQLiteProvider.dart';
 
-class CRUDServicesProvider extends ChangeNotifier {
+class CRUD_Services_Provider extends ChangeNotifier {
   final CRUDSQLiteProvider _database;
   
   // Track operations state
@@ -14,7 +14,7 @@ class CRUDServicesProvider extends ChangeNotifier {
   Map<String, int> _operationCounts = {};
 
   // Constructor
-  CRUDServicesProvider(this._database);
+  CRUD_Services_Provider(this._database);
 
   // Getters
   bool get isProcessing => _isProcessing;

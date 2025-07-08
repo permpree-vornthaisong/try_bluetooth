@@ -33,3 +33,30 @@ ASCII format (แสดงตัวอักษรถ้าเป็นได้
 
 adb pair 192.168.1.60:45405 899552 
 adb connect 192.168.1.60:40931
+
+
+await saveService.saveHumanWeight(
+  name: 'John Doe',
+  age: 30,
+  gender: 'Male',
+  notes: 'Regular checkup',
+);
+
+
+await saveService.saveAnimalWeight(
+  species: 'Dog',
+  breed: 'Golden Retriever',
+  animalId: 'DOG001',
+);
+
+
+await saveService.saveWeightToTable(
+  tableName: 'lab_weights',
+  saveType: 'laboratory',
+  additionalData: {
+    'lab_id': 'LAB001',
+    'operator': 'Lab Tech',
+    'temperature': 25.5,
+  },
+);
+
