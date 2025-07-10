@@ -1,3 +1,5 @@
+// 1. อัพเดท DisplayHomeProvider.dart - เพิ่ม state สำหรับ auto save mode
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'FormulaProvider.dart';
@@ -6,6 +8,9 @@ class DisplayHomeProvider extends ChangeNotifier {
   FormulaProvider? _formulaProvider;
   List<Map<String, dynamic>> _availableFormulas = [];
   String? _selectedFormula;
+  
+  // เพิ่ม state สำหรับ auto save mode
+  bool _isAutoSaveMode = false;
 
   // Constants for readonly option
   static const String readonlyValue = 'readonly';
@@ -13,6 +18,9 @@ class DisplayHomeProvider extends ChangeNotifier {
 
   List<Map<String, dynamic>> get availableFormulas => _getFormulasWithReadonly();
   String? get selectedFormula => _selectedFormula;
+  
+  // เพิ่ม getter สำหรับ auto save mode
+  bool get isAutoSaveMode => _isAutoSaveMode;
 
   // Helper getter to get formula names only for backward compatibility
   List<String> get availableFormulaNames => 
@@ -30,6 +38,20 @@ class DisplayHomeProvider extends ChangeNotifier {
     };
 
     return [readonlyOption, ..._availableFormulas];
+  }
+
+  // เพิ่มฟังก์ชัน toggle auto save mode
+  void toggleAutoSaveMode() {
+    _isAutoSaveMode = !_isAutoSaveMode;
+    debugPrint('🔄 [DisplayHomeProvider] Auto save mode: $_isAutoSaveMode');
+    notifyListeners();
+  }
+
+  // เพิ่มฟังก์ชัน set auto save mode
+  void setAutoSaveMode(bool enabled) {
+    _isAutoSaveMode = enabled;
+    debugPrint('🔧 [DisplayHomeProvider] Auto save mode set to: $_isAutoSaveMode');
+    notifyListeners();
   }
 
   Future<void> initialize(BuildContext context) async {
