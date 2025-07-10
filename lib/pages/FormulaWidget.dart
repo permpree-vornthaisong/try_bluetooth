@@ -85,159 +85,159 @@ class _FormulaWidgetState extends State<FormulaWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Debug info - แสดงจำนวน formulas
-                Card(
-                  color: const Color(
-                    0xFF7FB8C4,
-                  ).withOpacity(0.3), // สีฟ้าอ่อนเหมือนในรูป
-                  child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text(
-                      'Debug: จำนวน Formulas = ${provider.formulas.length}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF2D3E50),
-                      ),
-                    ),
-                  ),
-                ),
+                // Debug info card
+                // Card(
+                //   elevation: 2,
+                //   child: Container(
+                //     padding: EdgeInsets.all(12),
+                //     decoration: BoxDecoration(
+                //       borderRadius: BorderRadius.circular(8),
+                //       color: const Color(0xFF7FB8C4).withOpacity(0.3),
+                //     ),
+                //     child: Row(
+                //       children: [
+                //         Icon(
+                //           Icons.info_outline,
+                //           color: const Color(0xFF2D3E50),
+                //           size: 20,
+                //         ),
+                //         SizedBox(width: 8),
+                //         Text(
+                //           'Debug: จำนวน Formulas = ${provider.formulas.length}',
+                //           style: TextStyle(
+                //             fontSize: 12,
+                //             fontWeight: FontWeight.bold,
+                //             color: const Color(0xFF2D3E50),
+                //           ),
+                //         ),
+                //       ],
+                //     ),
+                //   ),
+                // ),
                 SizedBox(height: 8),
 
-                // Print All Tables Button
-                ElevatedButton(
-                  onPressed: () async {
-                    final provider = Provider.of<FormulaProvider>(
-                      context,
-                      listen: false,
-                    );
-                    await provider.printAllTables(); // ดูใน Debug Console
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(
-                      0xFF2D3E50,
-                    ), // สีเข้มเหมือนในรูป
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text('Print All Tables'),
-                ),
-
+                // Print All Tables Button Card
+                // Card(
+                //   elevation: 2,
+                //   child: InkWell(
+                //     onTap: () async {
+                //       final provider = Provider.of<FormulaProvider>(
+                //         context,
+                //         listen: false,
+                //       );
+                //       await provider.printAllTables();
+                //     },
+                //     borderRadius: BorderRadius.circular(8),
+                //     child: Container(
+                //       padding: EdgeInsets.all(16),
+                //       decoration: BoxDecoration(
+                //         borderRadius: BorderRadius.circular(8),
+                //         color: const Color(0xFF2D3E50),
+                //       ),
+                //       child: Row(
+                //         children: [
+                //           Icon(
+                //             Icons.print,
+                //             color: Colors.white,
+                //             size: 24,
+                //           ),
+                //           SizedBox(width: 12),
+                //           Text(
+                //             'Print All Tables',
+                //             style: TextStyle(
+                //               color: Colors.white,
+                //               fontSize: 16,
+                //               fontWeight: FontWeight.w600,
+                //             ),
+                //           ),
+                //           Spacer(),
+                //           Icon(
+                //             Icons.arrow_forward_ios,
+                //             color: Colors.white,
+                //             size: 16,
+                //           ),
+                //         ],
+                //       ),
+                //     ),
+                //   ),
+                // ),
                 SizedBox(height: 16),
 
-                // Main buttons - แสดง formulas ที่สร้างไว้ + ปุ่ม Add
+                // Main action cards
                 Expanded(
                   flex: 3,
                   child:
                       provider.formulas.isEmpty
-                          ? _buildEmptyFormulaGrid(
-                            provider,
-                          ) // ถ้าไม่มี formulas
-                          : GridView.builder(
-                            // ถ้ามี formulas
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 16,
-                                  childAspectRatio: 1.0,
-                                ),
-                            itemCount:
-                                provider.formulas.length +
-                                1, // +1 สำหรับปุ่ม Add
-                            itemBuilder: (context, index) {
-                              // ปุ่มสุดท้ายเป็นปุ่ม Add
-                              if (index == provider.formulas.length) {
-                                return _buildMainButton(
-                                  title: '',
-                                  icon: Icons.add,
-                                  color: const Color(
-                                    0xFF5A9B9E,
-                                  ), // สีเขียวอมฟ้าเหมือนในรูป
-                                  iconSize: 48,
-                                  onTap:
-                                      () => _showCreateFormulaDialog(provider),
-                                );
-                              }
-
-                              // ปุ่มสำหรับ formula ที่สร้างไว้
-                              final formula = provider.formulas[index];
-                              return _buildFormulaButton(
-                                formula: formula,
-                                onTap: () => _navigateToFormulaData(formula),
-                              );
-                            },
-                          ),
+                          ? _buildEmptyFormulaCards(provider)
+                          : _buildFormulaCards(provider),
                 ),
 
                 SizedBox(height: 16),
 
                 // Database info card
-                Expanded(
-                  flex: 1,
-                  child: Card(
-                    elevation: 4,
-                    child: Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFF7FB8C4).withOpacity(0.3),
-                            const Color(0xFF7FB8C4).withOpacity(0.5),
-                          ], // สีฟ้าอ่อนเหมือนในรูป
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.storage,
-                            size: 32,
-                            color: const Color(0xFF2D3E50),
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Formula Database',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF2D3E50),
-                                  ),
-                                ),
-                                Text(
-                                  'จำนวน: ${provider.formulas.length} formulas',
-                                  style: TextStyle(
-                                    color: const Color(0xFF2D3E50),
-                                  ),
-                                ),
-                                Text(
-                                  'Tables: ${provider.databaseTables.length} tables',
-                                  style: TextStyle(
-                                    color: const Color(0xFF2D3E50),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => _showDatabaseViewer(provider),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2D3E50),
-                              foregroundColor: Colors.white,
-                            ),
-                            child: Text('ส่งออก Excel'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                // Card(
+                //   elevation: 4,
+                //   child: Container(
+                //     padding: EdgeInsets.all(20),
+                //     decoration: BoxDecoration(
+                //       borderRadius: BorderRadius.circular(8),
+                //       gradient: LinearGradient(
+                //         colors: [
+                //           const Color(0xFF7FB8C4).withOpacity(0.3),
+                //           const Color(0xFF7FB8C4).withOpacity(0.5),
+                //         ],
+                //         begin: Alignment.topLeft,
+                //         end: Alignment.bottomRight,
+                //       ),
+                //     ),
+                //     child: Row(
+                //       children: [
+                //         Icon(
+                //           Icons.storage,
+                //           size: 32,
+                //           color: const Color(0xFF2D3E50),
+                //         ),
+                //         SizedBox(width: 16),
+                //         Expanded(
+                //           child: Column(
+                //             crossAxisAlignment: CrossAxisAlignment.start,
+                //             mainAxisAlignment: MainAxisAlignment.center,
+                //             children: [
+                //               Text(
+                //                 'Formula Database',
+                //                 style: TextStyle(
+                //                   fontSize: 18,
+                //                   fontWeight: FontWeight.bold,
+                //                   color: const Color(0xFF2D3E50),
+                //                 ),
+                //               ),
+                //               Text(
+                //                 'จำนวน: ${provider.formulas.length} formulas',
+                //                 style: TextStyle(
+                //                   color: const Color(0xFF2D3E50),
+                //                 ),
+                //               ),
+                //               Text(
+                //                 'Tables: ${provider.databaseTables.length} tables',
+                //                 style: TextStyle(
+                //                   color: const Color(0xFF2D3E50),
+                //                 ),
+                //               ),
+                //             ],
+                //           ),
+                //         ),
+                //         ElevatedButton(
+                //           onPressed: () => _showDatabaseViewer(provider),
+                //           style: ElevatedButton.styleFrom(
+                //             backgroundColor: const Color(0xFF2D3E50),
+                //             foregroundColor: Colors.white,
+                //           ),
+                //           child: Text('ส่งออก Excel'),
+                //         ),
+                //       ],
+                //     ),
+                //   ),
+                // ),
               ],
             ),
           );
@@ -246,55 +246,198 @@ class _FormulaWidgetState extends State<FormulaWidget> {
     );
   }
 
-  Widget _buildEmptyFormulaGrid(FormulaProvider provider) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 2.2, // เพิ่มเป็น 2.2 เพื่อให้ปุ่มเตี้ยลงมากขึ้น
+  Widget _buildEmptyFormulaCards(FormulaProvider provider) {
+    return ListView(
       children: [
-        // ปุ่ม + สำหรับสร้าง formula ใหม่
-        _buildMainButton(
-          title: 'สร้าง Formula',
-          icon: Icons.add,
-          color: const Color(0xFF5A9B9E), // สีเขียวอมฟ้าเหมือนในรูป
-          iconSize: 20, // เพิ่มขนาด icon กลับมาเล็กน้อย
-          onTap: () => _showCreateFormulaDialog(provider),
-        ),
-
-        // ปุ่ม Refresh
-        _buildMainButton(
-          title: 'รีเฟรช',
-          icon: Icons.refresh,
-          color: const Color(0xFF2D3E50), // สีเข้มเหมือนในรูป
-          iconSize: 20, // เพิ่มขนาด icon กลับมาเล็กน้อย
-          onTap: () => provider.refreshFormulas(),
-        ),
-
-        // ปุ่ม Database Viewer
-        _buildMainButton(
-          title: 'ดู Database',
-          icon: Icons.storage,
-          color: const Color(0xFF7FB8C4), // สีฟ้าอ่อนเหมือนในรูป
-          iconSize: 20, // เพิ่มขนาด icon กลับมาเล็กน้อย
-          onTap: () => _showDatabaseViewer(provider),
-        ),
-
-        // ปุ่มว่าง
-        Container(
-          decoration: BoxDecoration(
+        // สร้าง Formula Card
+        Card(
+          elevation: 4,
+          child: InkWell(
+            onTap: () => _showCreateFormulaDialog(provider),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300, width: 2),
-            color: Colors.grey.shade100,
-          ),
-          child: Center(
-            child: Text(
-              'ไม่มี Formula\nกดปุ่ม + เพื่อสร้าง',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 11, // ลดฟอนต์เล็กลง
+            child: Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF5A9B9E),
+                    const Color(0xFF5A9B9E).withOpacity(0.8),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.add_circle,
+                      size: 28,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'สร้าง Formula ใหม่',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'เริ่มต้นสร้างสูตรคำนวณของคุณ',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: 12),
+
+        // รีเฟรช Card
+        Card(
+          elevation: 2,
+          child: InkWell(
+            onTap: () => provider.refreshFormulas(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xFF2D3E50),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.refresh, color: Colors.white, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'รีเฟรช',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'อัพเดทข้อมูล Formula',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: 12),
+
+        // ดู Database Card
+        Card(
+          elevation: 2,
+          child: InkWell(
+            onTap: () => _showDatabaseViewer(provider),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xFF7FB8C4),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.storage, color: Colors.white, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ดู Database',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'จัดการข้อมูลทั้งหมด',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: 12),
+
+        // Empty state card
+        Card(
+          elevation: 1,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey.shade100,
+              border: Border.all(color: Colors.grey.shade300, width: 1),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 48,
+                  color: Colors.grey.shade400,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'ไม่มี Formula',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'กดปุ่มด้านบนเพื่อสร้าง Formula แรกของคุณ',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+              ],
             ),
           ),
         ),
@@ -302,103 +445,190 @@ class _FormulaWidgetState extends State<FormulaWidget> {
     );
   }
 
-  Widget _buildFormulaButton({
+  Widget _buildFormulaCards(FormulaProvider provider) {
+    return ListView.builder(
+      itemCount: provider.formulas.length + 1, // +1 สำหรับปุ่ม Add
+      itemBuilder: (context, index) {
+        // ปุ่มแรกเป็นปุ่ม Add Formula
+        if (index == 0) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Card(
+              elevation: 4,
+              child: InkWell(
+                onTap: () => _showCreateFormulaDialog(provider),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF5A9B9E),
+                        const Color(0xFF5A9B9E).withOpacity(0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.add_circle,
+                          size: 28,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'สร้าง Formula ใหม่',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'เพิ่มสูตรคำนวณใหม่',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Formula cards
+        final formula = provider.formulas[index - 1];
+        return Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: _buildFormulaCard(
+            formula: formula,
+            onTap: () => _navigateToFormulaData(formula),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFormulaCard({
     required Map<String, dynamic> formula,
     required VoidCallback onTap,
   }) {
-    final formulaName = formula.formulaName;
-    final columnCount = formula.columnCount;
+    final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
+    final columnCount = formula['column_count'] ?? 0;
+    final description = formula['description']?.toString() ?? '';
 
     return Card(
-      elevation: 8,
+      elevation: 3,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
+          padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             gradient: LinearGradient(
               colors: [
-                const Color(0xFF2D3E50), // สีเข้มเหมือนในรูป
+                const Color(0xFF2D3E50),
                 const Color(0xFF2D3E50).withOpacity(0.8),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.table_chart, size: 32, color: Colors.white),
-                SizedBox(height: 8),
-                Text(
-                  formulaName,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  '$columnCount คอลัมน์',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMainButton({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-    double iconSize = 20, // ปรับขนาด default
-  }) {
-    return Card(
-      elevation: 2, // ลด elevation อีก
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: color,
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ), // ลด padding
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: iconSize, color: Colors.white),
-                if (title.isNotEmpty) ...[
-                  SizedBox(height: 4), // ลดช่องว่างมากขึ้น
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 12, // ลดฟอนต์เล็กลง
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                child: Icon(Icons.table_chart, size: 28, color: Colors.white),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      formulaName,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
+                    SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF5A9B9E).withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '$columnCount คอลัมน์',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (description.isNotEmpty) ...[
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              description,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withOpacity(0.7),
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8),
+              Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+            ],
           ),
         ),
       ),
@@ -1690,7 +1920,7 @@ class _DatabaseViewerPageState extends State<DatabaseViewerPage> {
                 ),
                 SizedBox(height: 20),
 
-                // Tables List
+                // Tables List Header
                 Text(
                   'Tables ทั้งหมด',
                   style: TextStyle(
@@ -1701,6 +1931,7 @@ class _DatabaseViewerPageState extends State<DatabaseViewerPage> {
                 ),
                 SizedBox(height: 12),
 
+                // Tables List - แสดงเป็น Card แบบ List
                 Expanded(
                   child: ListView.builder(
                     itemCount: provider.databaseTables.length,
@@ -1710,118 +1941,167 @@ class _DatabaseViewerPageState extends State<DatabaseViewerPage> {
                       final isFormulaTable = table['is_formula_table'] as bool;
                       final recordCount = table['record_count'] as int;
 
-                      return Card(
-                        margin: EdgeInsets.only(bottom: 8),
-                        elevation: 2,
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor:
-                                isFormulaTable
-                                    ? const Color(0xFF5A9B9E)
-                                    : const Color(0xFF2D3E50),
-                            child: Icon(
-                              isFormulaTable
-                                  ? Icons.functions
-                                  : Icons.table_chart,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            tableName,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF2D3E50),
-                            ),
-                          ),
-                          subtitle: Text('$recordCount records'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isFormulaTable)
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF5A9B9E,
-                                    ).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    'Formula',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF5A9B9E),
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Card(
+                          elevation: 2,
+                          child: InkWell(
+                            onTap: () => _viewTableData(tableName, provider),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  // Icon
+                                  Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          isFormulaTable
+                                              ? const Color(0xFF5A9B9E)
+                                              : const Color(0xFF2D3E50),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      isFormulaTable
+                                          ? Icons.functions
+                                          : Icons.table_chart,
+                                      color: Colors.white,
+                                      size: 20,
                                     ),
                                   ),
-                                ),
-                              SizedBox(width: 8),
-                              PopupMenuButton<String>(
-                                onSelected:
-                                    (value) => _handleTableAction(
-                                      value,
-                                      tableName,
-                                      provider,
-                                    ),
-                                itemBuilder:
-                                    (context) => [
-                                      PopupMenuItem(
-                                        value: 'view',
-                                        child: Row(
+                                  SizedBox(width: 12),
+
+                                  // Content
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
                                           children: [
-                                            Icon(
-                                              Icons.visibility,
-                                              size: 16,
-                                              color: const Color(0xFF2D3E50),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text('ดูข้อมูล'),
-                                          ],
-                                        ),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'export',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.file_download,
-                                              size: 16,
-                                              color: const Color(0xFF5A9B9E),
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text('ส่งออก'),
-                                          ],
-                                        ),
-                                      ),
-                                      if (recordCount > 0)
-                                        PopupMenuItem(
-                                          value: 'clear',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.clear_all,
-                                                size: 16,
-                                                color: Colors.orange,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'ล้างข้อมูล',
+                                            Expanded(
+                                              child: Text(
+                                                tableName,
                                                 style: TextStyle(
-                                                  color: Colors.orange,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: const Color(
+                                                    0xFF2D3E50,
+                                                  ),
+                                                  fontSize: 16,
                                                 ),
                                               ),
-                                            ],
+                                            ),
+                                            if (isFormulaTable)
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(
+                                                    0xFF5A9B9E,
+                                                  ).withOpacity(0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  'Formula',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: const Color(
+                                                      0xFF5A9B9E,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          '$recordCount records',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade600,
+                                            fontSize: 14,
                                           ),
                                         ),
-                                    ],
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Menu Button
+                                  PopupMenuButton<String>(
+                                    onSelected:
+                                        (value) => _handleTableAction(
+                                          value,
+                                          tableName,
+                                          provider,
+                                        ),
+                                    icon: Icon(
+                                      Icons.more_vert,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    itemBuilder:
+                                        (context) => [
+                                          PopupMenuItem(
+                                            value: 'view',
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.visibility,
+                                                  size: 16,
+                                                  color: const Color(
+                                                    0xFF2D3E50,
+                                                  ),
+                                                ),
+                                                SizedBox(width: 8),
+                                                Text('ดูข้อมูล'),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'export',
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.file_download,
+                                                  size: 16,
+                                                  color: const Color(
+                                                    0xFF5A9B9E,
+                                                  ),
+                                                ),
+                                                SizedBox(width: 8),
+                                                Text('ส่งออก'),
+                                              ],
+                                            ),
+                                          ),
+                                          if (recordCount > 0)
+                                            PopupMenuItem(
+                                              value: 'clear',
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.clear_all,
+                                                    size: 16,
+                                                    color: Colors.orange,
+                                                  ),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    'ล้างข้อมูล',
+                                                    style: TextStyle(
+                                                      color: Colors.orange,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                          onTap: () => _viewTableData(tableName, provider),
                         ),
                       );
                     },
