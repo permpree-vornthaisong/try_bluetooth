@@ -31,10 +31,11 @@ class SettingProvider extends ChangeNotifier {
   bool _autoSubscribeEnabled = true;
   Map<String, bool> _characteristicSubscriptions_status = {};
 
-  // ✅ เพิ่มส่วนนี้ - Raw value storage for calibration
+  // ✅ เพิ่มส่วนนี้ - Raw value storage for calibration และ raw text
   double? _currentRawValue;
   String? _primaryCharacteristicUuid; // UUID of main weight characteristic
   String _lastRawText = ''; // Store last received text for debugging
+  String _rawReceivedText = ''; // ⚡ เพิ่มตัวแปรนี้สำหรับเก็บข้อมูล raw text ล่าสุด
 
   // Getters
   BluetoothAdapterState get adapterState => _adapterState;
@@ -51,6 +52,7 @@ class SettingProvider extends ChangeNotifier {
   // ✅ เพิ่ม getters ใหม่
   double? get currentRawValue => _currentRawValue; // Clean raw value for calibration
   String get lastRawText => _lastRawText; // For debugging
+  String? get rawReceivedText => _rawReceivedText.isNotEmpty ? _rawReceivedText : null; // ⚡ เพิ่ม getter นี้
 
   bool get autoSubscribeEnabled => _autoSubscribeEnabled;
   
@@ -65,17 +67,40 @@ class SettingProvider extends ChangeNotifier {
     return input.replaceAll(RegExp(r'[^0-9.-]'), '');
   }
 
-  // ✅ เพิ่ม method ใหม่ - แยกค่าตัวเลขจากข้อมูลที่รับมา
+  // ✅ แก้ไข method นี้ - แยกค่าตัวเลขจากข้อมูลที่รับมาและเก็บ raw text
   double? _extractRawValue(List<int> data) {
     try {
       // Convert bytes to string
       String text = String.fromCharCodes(data).trim();
       _lastRawText = text; // Store for debugging
+      _rawReceivedText = text; // ⚡ เก็บข้อมูล raw text ล่าสุด
       
       if (kDebugMode) {
         print('Raw received text: "$text"');
       }
       
+      // ⚡ ตรวจสอบรูปแบบข้อมูลแบบใหม่ เช่น "U002.00T000.00DN" หรือ "S002.00T000.00DN"
+      if (text.length >= 14 && text.endsWith('DN')) {
+        // รูปแบบ: U/S + 002.00 + T + 000.00 + DN
+        // ดึงเฉพาะส่วนน้ำหนัก (ตำแหน่ง 1-6)
+        try {
+          String weightPart = text.substring(1, 7); // "002.00"
+          double? weightValue = double.tryParse(weightPart);
+          
+          if (weightValue != null && weightValue.isFinite && !weightValue.isNaN) {
+            if (kDebugMode) {
+              print('Extracted raw value: $weightValue');
+            }
+            return weightValue;
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error parsing weight from structured format: $e');
+          }
+        }
+      }
+      
+      // ถ้าไม่ใช่รูปแบบใหม่ ใช้วิธีเดิม
       // Remove all non-numeric characters except decimal point and minus sign
       String cleanText = _cleanNumericString(text);
       
@@ -109,6 +134,39 @@ class SettingProvider extends ChangeNotifier {
         print('Error extracting raw value: $e');
       }
       return null;
+    }
+  }
+
+  // ✅ เพิ่ม method ใหม่ - แยกข้อมูลแบบละเอียดจาก raw text
+  Map<String, dynamic> parseWeightData(String rawData) {
+    try {
+      // ตัวอย่าง: "U002.00T000.00DN" หรือ "S002.00T000.00DN"
+      if (rawData.length < 13) return {};
+      
+      // ดึงสถานะ (U = Unstable, S = Stable)
+      String status = rawData.substring(0, 1);
+      bool isStable = status == 'S';
+      
+      // ดึงน้ำหนัก (ตำแหน่ง 1-6: "002.00")
+      String weightStr = rawData.substring(1, 7);
+      double weight = double.tryParse(weightStr) ?? 0.0;
+      
+      // ดึงค่า Tare (ตำแหน่ง 8-13: "000.00")
+      String tareStr = rawData.substring(8, 14);
+      double tare = double.tryParse(tareStr) ?? 0.0;
+      
+      return {
+        'status': status,
+        'isStable': isStable,
+        'weight': weight,
+        'tare': tare,
+        'rawData': rawData,
+      };
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error parsing weight data: $e');
+      }
+      return {};
     }
   }
 
@@ -364,8 +422,7 @@ class SettingProvider extends ChangeNotifier {
       final subscription = characteristic.onValueReceived.listen((value) {
         _characteristicValues[characteristic.uuid.toString()] = value;
         
-        // ✅ แก้ไขส่วนนี้ - แยกค่า raw value สำหรับ calibration
-        // Extract clean raw value for calibration
+        // ✅ แก้ไขส่วนนี้ - แยกค่า raw value สำหรับ calibration และเก็บ raw text
         double? rawValue = _extractRawValue(value);
         if (rawValue != null) {
           _currentRawValue = rawValue;
@@ -476,10 +533,11 @@ class SettingProvider extends ChangeNotifier {
     _rssi = null;
     _mtu = null;
     
-    // ✅ เพิ่มส่วนนี้ - เคลียร์ raw value data
+    // ✅ เพิ่มส่วนนี้ - เคลียร์ raw value data และ raw text
     _currentRawValue = null;
     _primaryCharacteristicUuid = null;
     _lastRawText = '';
+    _rawReceivedText = ''; // ⚡ เคลียร์ raw text ด้วย
     
     // Cancel all characteristic subscriptions
     for (var subscription in _characteristicSubscriptions) {
