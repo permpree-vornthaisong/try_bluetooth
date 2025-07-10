@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/providers/FormulaProvider.dart';
+import 'package:try_bluetooth/providers/GenericCRUDProvider.dart';
 
 class FormulaWidget extends StatefulWidget {
   @override
@@ -12,17 +13,24 @@ class _FormulaWidgetState extends State<FormulaWidget> {
   void initState() {
     super.initState();
 
+    print("536987");
+
     // Initialize provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<FormulaProvider>(context, listen: false);
-      provider.initialize(context);
+      provider.initialize(context).then((_) {
+        // หลังจาก initialize เสร็จแล้ว ค่อยเรียก getFormulaTableNames
+        print("✅ FormulaProvider initialized");
+        final formulaTableNames = provider.getFormulaTableNames();
+        print("📝 Formula table names: $formulaTableNames");
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.grey.shade200, // เป็นเหมือนพื้นหลังในรูป
       body: Consumer<FormulaProvider>(
         builder: (context, provider, child) {
           // Loading state
@@ -31,11 +39,11 @@ class _FormulaWidgetState extends State<FormulaWidget> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(color: Colors.teal),
+                  CircularProgressIndicator(color: const Color(0xFF2D3E50)),
                   SizedBox(height: 16),
                   Text(
                     'กำลังเตรียม Formula Database...',
-                    style: TextStyle(fontSize: 16, color: Colors.teal),
+                    style: TextStyle(fontSize: 16, color: const Color(0xFF2D3E50)),
                   ),
                 ],
               ),
@@ -57,6 +65,10 @@ class _FormulaWidgetState extends State<FormulaWidget> {
                   SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.retryInitialization(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2D3E50),
+                      foregroundColor: Colors.white,
+                    ),
                     child: Text('ลองใหม่'),
                   ),
                 ],
@@ -70,50 +82,75 @@ class _FormulaWidgetState extends State<FormulaWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Main buttons grid (2x2)
+                // Debug info - แสดงจำนวน formulas
+                Card(
+                  color: const Color(0xFF7FB8C4).withOpacity(0.3), // สีฟ้าอ่อนเหมือนในรูป
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text(
+                      'Debug: จำนวน Formulas = ${provider.formulas.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF2D3E50),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 8),
+                
+                // Print All Tables Button
+                ElevatedButton(
+                  onPressed: () async {
+                    final provider = Provider.of<FormulaProvider>(
+                      context,
+                      listen: false,
+                    );
+                    await provider.printAllTables(); // ดูใน Debug Console
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2D3E50), // สีเข้มเหมือนในรูป
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text('Print All Tables'),
+                ),
+                
+                SizedBox(height: 16),
+                
+                // Main buttons - แสดง formulas ที่สร้างไว้ + ปุ่ม Add
                 Expanded(
                   flex: 3,
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.0,
-                    children: [
-                      // คน button
-                      _buildMainButton(
-                        title: 'คน',
-                        icon: Icons.person,
-                        color: Colors.teal,
-                        onTap: () => _navigateToFormulaList(provider, 'คน'),
-                      ),
+                  child: provider.formulas.isEmpty
+                      ? _buildEmptyFormulaGrid(provider) // ถ้าไม่มี formulas
+                      : GridView.builder(
+                          // ถ้ามี formulas
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 1.0,
+                          ),
+                          itemCount: provider.formulas.length + 1, // +1 สำหรับปุ่ม Add
+                          itemBuilder: (context, index) {
+                            // ปุ่มสุดท้ายเป็นปุ่ม Add
+                            if (index == provider.formulas.length) {
+                              return _buildMainButton(
+                                title: '',
+                                icon: Icons.add,
+                                color: const Color(0xFF5A9B9E), // สีเขียวอมฟ้าเหมือนในรูป
+                                iconSize: 48,
+                                onTap: () => _showCreateFormulaDialog(provider),
+                              );
+                            }
 
-                      // สัตว์ button
-                      _buildMainButton(
-                        title: 'สัตว์',
-                        icon: Icons.pets,
-                        color: Colors.orange,
-                        onTap: () => _navigateToFormulaList(provider, 'สัตว์'),
-                      ),
-
-                      // สิ่งของ button
-                      _buildMainButton(
-                        title: 'สิ่งของ',
-                        icon: Icons.inventory,
-                        color: Colors.purple,
-                        onTap:
-                            () => _navigateToFormulaList(provider, 'สิ่งของ'),
-                      ),
-
-                      // + button (สร้าง formula ใหม่)
-                      _buildMainButton(
-                        title: '',
-                        icon: Icons.add,
-                        color: Colors.green,
-                        iconSize: 48,
-                        onTap: () => _showCreateFormulaDialog(provider),
-                      ),
-                    ],
-                  ),
+                            // ปุ่มสำหรับ formula ที่สร้างไว้
+                            final formula = provider.formulas[index];
+                            return _buildFormulaButton(
+                              formula: formula,
+                              onTap: () => _navigateToFormulaData(formula),
+                            );
+                          },
+                        ),
                 ),
 
                 SizedBox(height: 16),
@@ -128,14 +165,17 @@ class _FormulaWidgetState extends State<FormulaWidget> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         gradient: LinearGradient(
-                          colors: [Colors.blue.shade50, Colors.blue.shade100],
+                          colors: [
+                            const Color(0xFF7FB8C4).withOpacity(0.3),
+                            const Color(0xFF7FB8C4).withOpacity(0.5),
+                          ], // สีฟ้าอ่อนเหมือนในรูป
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.storage, size: 32, color: Colors.blue),
+                          Icon(Icons.storage, size: 32, color: const Color(0xFF2D3E50)),
                           SizedBox(width: 16),
                           Expanded(
                             child: Column(
@@ -143,18 +183,20 @@ class _FormulaWidgetState extends State<FormulaWidget> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  'คน',
+                                  'Formula Database',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
+                                    color: const Color(0xFF2D3E50),
                                   ),
                                 ),
                                 Text(
                                   'จำนวน: ${provider.formulas.length} formulas',
+                                  style: TextStyle(color: const Color(0xFF2D3E50)),
                                 ),
                                 Text(
                                   'Tables: ${provider.databaseTables.length} tables',
+                                  style: TextStyle(color: const Color(0xFF2D3E50)),
                                 ),
                               ],
                             ),
@@ -162,7 +204,7 @@ class _FormulaWidgetState extends State<FormulaWidget> {
                           ElevatedButton(
                             onPressed: () => _showDatabaseViewer(provider),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: const Color(0xFF2D3E50),
                               foregroundColor: Colors.white,
                             ),
                             child: Text('ส่งออก Excel'),
@@ -180,10 +222,118 @@ class _FormulaWidgetState extends State<FormulaWidget> {
     );
   }
 
+  Widget _buildEmptyFormulaGrid(FormulaProvider provider) {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.0,
+      children: [
+        // ปุ่ม + สำหรับสร้าง formula ใหม่
+        _buildMainButton(
+          title: 'สร้าง Formula',
+          icon: Icons.add,
+          color: const Color(0xFF5A9B9E), // สีเขียวอมฟ้าเหมือนในรูป
+          iconSize: 32,
+          onTap: () => _showCreateFormulaDialog(provider),
+        ),
+
+        // ปุ่ม Refresh
+        _buildMainButton(
+          title: 'รีเฟรช',
+          icon: Icons.refresh,
+          color: const Color(0xFF2D3E50), // สีเข้มเหมือนในรูป
+          iconSize: 32,
+          onTap: () => provider.refreshFormulas(),
+        ),
+
+        // ปุ่ม Database Viewer
+        _buildMainButton(
+          title: 'ดู Database',
+          icon: Icons.storage,
+          color: const Color(0xFF7FB8C4), // สีฟ้าอ่อนเหมือนในรูป
+          iconSize: 32,
+          onTap: () => _showDatabaseViewer(provider),
+        ),
+
+        // ปุ่มว่าง
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300, width: 2),
+            color: Colors.grey.shade100,
+          ),
+          child: Center(
+            child: Text(
+              'ไม่มี Formula\nกดปุ่ม + เพื่อสร้าง',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormulaButton({
+    required Map<String, dynamic> formula,
+    required VoidCallback onTap,
+  }) {
+    final formulaName = formula.formulaName;
+    final columnCount = formula.columnCount;
+
+    return Card(
+      elevation: 8,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF2D3E50), // สีเข้มเหมือนในรูป
+                const Color(0xFF2D3E50).withOpacity(0.8),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.table_chart, size: 32, color: Colors.white),
+                SizedBox(height: 8),
+                Text(
+                  formulaName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 4),
+                Text(
+                  '$columnCount คอลัมน์',
+                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMainButton({
     required String title,
     required IconData icon,
-    required MaterialColor color,
+    required Color color,
     required VoidCallback onTap,
     double iconSize = 32,
   }) {
@@ -195,11 +345,7 @@ class _FormulaWidgetState extends State<FormulaWidget> {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            gradient: LinearGradient(
-              colors: [color.shade300, color.shade500],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: color, // ใช้สีเดียวแทน gradient
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -210,10 +356,11 @@ class _FormulaWidgetState extends State<FormulaWidget> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ],
@@ -225,11 +372,20 @@ class _FormulaWidgetState extends State<FormulaWidget> {
 
   // ========== NAVIGATION METHODS ==========
 
+  void _navigateToFormulaData(Map<String, dynamic> formula) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FormulaDetailsPage(formula: formula),
+      ),
+    );
+  }
+
   void _navigateToFormulaList(FormulaProvider provider, String category) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FormulaListPage(category: category),
+        builder: (context) => CategoryDataPage(category: category),
       ),
     );
   }
@@ -257,148 +413,169 @@ class _FormulaWidgetState extends State<FormulaWidget> {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => AlertDialog(
-                  title: Row(
-                    children: [
-                      Icon(Icons.add_circle, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('สร้าง Formula ใหม่'),
-                    ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: Row(
+            children: [
+              Icon(Icons.add_circle, color: const Color(0xFF5A9B9E)),
+              SizedBox(width: 8),
+              Text(
+                'สร้าง Formula ใหม่',
+                style: TextStyle(color: const Color(0xFF2D3E50)),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Container(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Formula name
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'ชื่อ Formula *',
+                      border: OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: const Color(0xFF5A9B9E)),
+                      ),
+                      prefixIcon: Icon(Icons.title, color: const Color(0xFF5A9B9E)),
+                    ),
                   ),
-                  content: SingleChildScrollView(
-                    child: Container(
-                      width: double.maxFinite,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Formula name
-                          TextField(
-                            controller: nameController,
-                            decoration: InputDecoration(
-                              labelText: 'ชื่อ Formula *',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.title),
-                            ),
-                          ),
-                          SizedBox(height: 16),
+                  SizedBox(height: 16),
 
-                          // Description
-                          TextField(
-                            controller: descriptionController,
-                            decoration: InputDecoration(
-                              labelText: 'คำอธิบาย',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.description),
-                            ),
-                            maxLines: 2,
-                          ),
-                          SizedBox(height: 16),
+                  // Description
+                  TextField(
+                    controller: descriptionController,
+                    decoration: InputDecoration(
+                      labelText: 'คำอธิบาย',
+                      border: OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: const Color(0xFF5A9B9E)),
+                      ),
+                      prefixIcon: Icon(Icons.description, color: const Color(0xFF5A9B9E)),
+                    ),
+                    maxLines: 2,
+                  ),
+                  SizedBox(height: 16),
 
-                          // Column count
-                          Row(
-                            children: [
-                              Icon(Icons.view_column, color: Colors.blue),
-                              SizedBox(width: 8),
-                              Text(
-                                'จำนวน Column:',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              SizedBox(width: 16),
-                              DropdownButton<int>(
-                                value: columnCount,
-                                items:
-                                    List.generate(10, (index) => index + 1)
-                                        .map(
-                                          (count) => DropdownMenuItem(
-                                            value: count,
-                                            child: Text(
-                                              '$count column${count > 1 ? 's' : ''}',
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    columnCount = value!;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16),
-
-                          // Column names
-                          Text(
-                            'ชื่อ Columns:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 8),
-                          ...List.generate(
-                            columnCount,
-                            (index) => Padding(
-                              padding: EdgeInsets.only(bottom: 8),
-                              child: TextField(
-                                controller: columnControllers[index],
-                                decoration: InputDecoration(
-                                  labelText: 'Column ${index + 1} *',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.label_outline),
+                  // Column count
+                  Row(
+                    children: [
+                      Icon(Icons.view_column, color: const Color(0xFF2D3E50)),
+                      SizedBox(width: 8),
+                      Text(
+                        'จำนวน Column:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF2D3E50),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      DropdownButton<int>(
+                        value: columnCount,
+                        dropdownColor: Colors.white,
+                        items: List.generate(10, (index) => index + 1)
+                            .map(
+                              (count) => DropdownMenuItem(
+                                value: count,
+                                child: Text(
+                                  '$count column${count > 1 ? 's' : ''}',
+                                  style: TextStyle(color: const Color(0xFF2D3E50)),
                                 ),
                               ),
-                            ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            columnCount = value!;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+
+                  // Column names
+                  Text(
+                    'ชื่อ Columns:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF2D3E50),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  ...List.generate(
+                    columnCount,
+                    (index) => Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: TextField(
+                        controller: columnControllers[index],
+                        decoration: InputDecoration(
+                          labelText: 'Column ${index + 1} *',
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: const Color(0xFF5A9B9E)),
                           ),
-                        ],
+                          prefixIcon: Icon(Icons.label_outline, color: const Color(0xFF5A9B9E)),
+                        ),
                       ),
                     ),
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text('ยกเลิก'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        // Validation
-                        if (nameController.text.trim().isEmpty) {
-                          _showMessage('กรุณาใส่ชื่อ Formula');
-                          return;
-                        }
-
-                        bool hasEmptyColumn = false;
-                        for (int i = 0; i < columnCount; i++) {
-                          if (columnControllers[i].text.trim().isEmpty) {
-                            hasEmptyColumn = true;
-                            break;
-                          }
-                        }
-
-                        if (hasEmptyColumn) {
-                          _showMessage('กรุณาใส่ชื่อ Column ให้ครบทุกช่อง');
-                          return;
-                        }
-
-                        Navigator.pop(context, true);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                      ),
-                      child: Text('สร้าง Formula'),
-                    ),
-                  ],
-                ),
+                ],
+              ),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'ยกเลิก',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // Validation
+                if (nameController.text.trim().isEmpty) {
+                  _showMessage('กรุณาใส่ชื่อ Formula');
+                  return;
+                }
+
+                bool hasEmptyColumn = false;
+                for (int i = 0; i < columnCount; i++) {
+                  if (columnControllers[i].text.trim().isEmpty) {
+                    hasEmptyColumn = true;
+                    break;
+                  }
+                }
+
+                if (hasEmptyColumn) {
+                  _showMessage('กรุณาใส่ชื่อ Column ให้ครบทุกช่อง');
+                  return;
+                }
+
+                Navigator.pop(context, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF5A9B9E),
+                foregroundColor: Colors.white,
+              ),
+              child: Text('สร้าง Formula'),
+            ),
+          ],
+        ),
+      ),
     );
 
     if (result == true) {
-      final columnNames =
-          columnControllers
-              .take(columnCount)
-              .map((controller) => controller.text.trim())
-              .toList();
+      final columnNames = columnControllers
+          .take(columnCount)
+          .map((controller) => controller.text.trim())
+          .toList();
 
       final success = await provider.createFormula(
         formulaName: nameController.text.trim(),
@@ -409,6 +586,8 @@ class _FormulaWidgetState extends State<FormulaWidget> {
 
       if (success) {
         _showMessage('✅ Formula สร้างสำเร็จแล้ว!');
+        // รีเฟรชข้อมูลทันทีหลังสร้าง formula สำเร็จ
+        await provider.refreshFormulas();
       } else {
         _showMessage('❌ ไม่สามารถสร้าง Formula ได้: ${provider.lastError}');
       }
@@ -425,544 +604,49 @@ class _FormulaWidgetState extends State<FormulaWidget> {
   void _showMessage(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: Duration(seconds: 2)),
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF2D3E50),
+          duration: Duration(seconds: 2),
+        ),
       );
     }
   }
 }
 
-// ========== FORMULA LIST PAGE ==========
-
-class FormulaListPage extends StatefulWidget {
+// เพิ่ม placeholder classes เพื่อไม่ให้ error
+class CategoryDataPage extends StatelessWidget {
   final String category;
+  const CategoryDataPage({Key? key, required this.category}) : super(key: key);
 
-  const FormulaListPage({Key? key, required this.category}) : super(key: key);
-
-  @override
-  State<FormulaListPage> createState() => _FormulaListPageState();
-}
-
-class _FormulaListPageState extends State<FormulaListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('📋 ${widget.category} Formulas'),
-        backgroundColor: Colors.blue[100],
-        actions: [
-          IconButton(
-            onPressed: () => _showCreateFormulaDialog(),
-            icon: Icon(Icons.add),
-          ),
-        ],
-      ),
-      body: Consumer<FormulaProvider>(
-        builder: (context, provider, child) {
-          if (provider.isProcessing) {
-            return Center(child: CircularProgressIndicator());
-          }
-
-          final formulas =
-              provider.formulas
-                  .where(
-                    (formula) => _isFormulaInCategory(formula, widget.category),
-                  )
-                  .toList();
-
-          if (formulas.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _getCategoryIcon(widget.category),
-                    size: 64,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'ไม่มี ${widget.category} Formula',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'สร้าง Formula แรกของคุณ',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => _showCreateFormulaDialog(),
-                    icon: Icon(Icons.add),
-                    label: Text('สร้าง Formula'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: EdgeInsets.all(16),
-            itemCount: formulas.length,
-            itemBuilder: (context, index) {
-              final formula = formulas[index];
-              return Card(
-                margin: EdgeInsets.only(bottom: 12),
-                elevation: 2,
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getCategoryColor(widget.category),
-                    child: Text(
-                      formula.initials,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    formula.formulaName,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Columns: ${formula.columnCount}'),
-                      Text('Fields: ${formula.columnNames.join(", ")}'),
-                      if (formula.description.isNotEmpty)
-                        Text('คำอธิบาย: ${formula.description}'),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'view') {
-                        _showFormulaDetails(formula);
-                      } else if (value == 'delete') {
-                        _confirmDeleteFormula(provider, formula);
-                      }
-                    },
-                    itemBuilder:
-                        (context) => [
-                          PopupMenuItem(
-                            value: 'view',
-                            child: Row(
-                              children: [
-                                Icon(Icons.visibility, size: 16),
-                                SizedBox(width: 8),
-                                Text('ดูข้อมูล'),
-                              ],
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 16, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('ลบ', style: TextStyle(color: Colors.red)),
-                              ],
-                            ),
-                          ),
-                        ],
-                  ),
-                  onTap: () => _showFormulaDetails(formula),
-                ),
-              );
-            },
-          );
-        },
-      ),
+      appBar: AppBar(title: Text(category)),
+      body: Center(child: Text('Category Data Page for $category')),
     );
-  }
-
-  void _showCreateFormulaDialog() {
-    // Similar to the main create dialog but filtered for this category
-    Navigator.pop(context); // Go back to main page
-    // The main page will handle the create dialog
-  }
-
-  void _showFormulaDetails(Map<String, dynamic> formula) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FormulaDetailsPage(formula: formula),
-      ),
-    );
-  }
-
-  Future<void> _confirmDeleteFormula(
-    FormulaProvider provider,
-    Map<String, dynamic> formula,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text('ลบ Formula'),
-            content: Text('คุณแน่ใจหรือไม่ที่จะลบ\n"${formula.formulaName}"?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text('ยกเลิก'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: Text('ลบ'),
-              ),
-            ],
-          ),
-    );
-
-    if (confirmed == true) {
-      final success = await provider.deleteFormula(
-        formula.formulaId,
-        formula.formulaName,
-      );
-
-      if (success) {
-        _showMessage('✅ Formula ถูกลบแล้ว!');
-      } else {
-        _showMessage('❌ ไม่สามารถลบ Formula ได้: ${provider.lastError}');
-      }
-    }
-  }
-
-  Color _getCategoryColor(String category) {
-    switch (category) {
-      case 'คน':
-        return Colors.teal;
-      case 'สัตว์':
-        return Colors.orange;
-      case 'สิ่งของ':
-        return Colors.purple;
-      default:
-        return Colors.blue;
-    }
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category) {
-      case 'คน':
-        return Icons.person;
-      case 'สัตว์':
-        return Icons.pets;
-      case 'สิ่งของ':
-        return Icons.inventory;
-      default:
-        return Icons.description;
-    }
-  }
-
-  bool _isFormulaInCategory(Map<String, dynamic> formula, String category) {
-    // This is a simple categorization based on formula name or could be more sophisticated
-    final name = formula.formulaName.toLowerCase();
-    switch (category) {
-      case 'คน':
-        return name.contains('คน') ||
-            name.contains('person') ||
-            name.contains('human') ||
-            name.contains('people');
-      case 'สัตว์':
-        return name.contains('สัตว์') ||
-            name.contains('animal') ||
-            name.contains('pet');
-      case 'สิ่งของ':
-        return name.contains('สิ่งของ') ||
-            name.contains('object') ||
-            name.contains('item') ||
-            name.contains('thing');
-      default:
-        return true;
-    }
-  }
-
-  void _showMessage(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: Duration(seconds: 2)),
-      );
-    }
   }
 }
 
-// ========== FORMULA DETAILS PAGE ==========
-
-class FormulaDetailsPage extends StatefulWidget {
+class FormulaDetailsPage extends StatelessWidget {
   final Map<String, dynamic> formula;
-
   const FormulaDetailsPage({Key? key, required this.formula}) : super(key: key);
 
   @override
-  State<FormulaDetailsPage> createState() => _FormulaDetailsPageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Formula Details')),
+      body: Center(child: Text('Formula Details Page')),
+    );
+  }
 }
 
-class _FormulaDetailsPageState extends State<FormulaDetailsPage> {
-  List<Map<String, dynamic>> _tableData = [];
-  List<String> _tableColumns = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTableData();
-  }
-
-  Future<void> _loadTableData() async {
-    final provider = Provider.of<FormulaProvider>(context, listen: false);
-    final tableName = widget.formula.tableName;
-
-    try {
-      final data = await provider.getTableData(tableName);
-      final columns = await provider.getTableColumns(tableName);
-
-      setState(() {
-        _tableData = data;
-        _tableColumns = columns;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showMessage('ไม่สามารถโหลดข้อมูลได้: $e');
-    }
-  }
-
+class DatabaseViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('📊 ${widget.formula.formulaName}'),
-        backgroundColor: Colors.blue.shade100,
-        actions: [
-          IconButton(onPressed: () => _addNewRecord(), icon: Icon(Icons.add)),
-          IconButton(
-            onPressed: () => _exportToExcel(),
-            icon: Icon(Icons.file_download),
-          ),
-        ],
-      ),
-      body:
-          _isLoading
-              ? Center(child: CircularProgressIndicator())
-              : Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Formula info card
-                    Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.formula.formulaName,
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text('Columns: ${widget.formula.columnCount}'),
-                            Text(
-                              'Fields: ${widget.formula.columnNames.join(", ")}',
-                            ),
-                            if (widget.formula.description.isNotEmpty)
-                              Text('คำอธิบาย: ${widget.formula.description}'),
-                            Text('Records: ${_tableData.length}'),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Data table
-                    Expanded(
-                      child:
-                          _tableData.isEmpty
-                              ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.table_chart,
-                                      size: 64,
-                                      color: Colors.grey,
-                                    ),
-                                    SizedBox(height: 16),
-                                    Text(
-                                      'ไม่มีข้อมูล',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      'เพิ่มข้อมูลแรกของคุณ',
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
-                                    SizedBox(height: 16),
-                                    ElevatedButton.icon(
-                                      onPressed: () => _addNewRecord(),
-                                      icon: Icon(Icons.add),
-                                      label: Text('เพิ่มข้อมูล'),
-                                    ),
-                                  ],
-                                ),
-                              )
-                              : SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: DataTable(
-                                  columns:
-                                      _tableColumns
-                                          .map(
-                                            (column) => DataColumn(
-                                              label: Text(
-                                                column,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                  rows:
-                                      _tableData
-                                          .map(
-                                            (row) => DataRow(
-                                              cells:
-                                                  _tableColumns
-                                                      .map(
-                                                        (column) => DataCell(
-                                                          Text(
-                                                            row[column]
-                                                                    ?.toString() ??
-                                                                '',
-                                                          ),
-                                                        ),
-                                                      )
-                                                      .toList(),
-                                            ),
-                                          )
-                                          .toList(),
-                                ),
-                              ),
-                    ),
-                  ],
-                ),
-              ),
+      appBar: AppBar(title: Text('Database Viewer')),
+      body: Center(child: Text('Database Viewer Page')),
     );
-  }
-
-  void _addNewRecord() {
-    // Show dialog to add new record
-    _showMessage('เพิ่มข้อมูลใหม่ (ฟีเจอร์นี้จะพัฒนาต่อ)');
-  }
-
-  void _exportToExcel() {
-    // Export data to Excel
-    _showMessage('ส่งออก Excel (ฟีเจอร์นี้จะพัฒนาต่อ)');
-  }
-
-  void _showMessage(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: Duration(seconds: 2)),
-      );
-    }
-  }
-}
-
-// ========== DATABASE VIEWER PAGE ==========
-
-class DatabaseViewerPage extends StatefulWidget {
-  @override
-  State<DatabaseViewerPage> createState() => _DatabaseViewerPageState();
-}
-
-class _DatabaseViewerPageState extends State<DatabaseViewerPage> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('🗃️ Database Viewer'),
-        backgroundColor: Colors.blue.shade100,
-      ),
-      body: Consumer<FormulaProvider>(
-        builder: (context, provider, child) {
-          if (provider.databaseTables.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.storage, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'ไม่มี Tables ใน Database',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: EdgeInsets.all(16),
-            itemCount: provider.databaseTables.length,
-            itemBuilder: (context, index) {
-              final table = provider.databaseTables[index];
-              final isFormulaTable = table['is_formula_table'] as bool;
-
-              return Card(
-                margin: EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        isFormulaTable ? Colors.green : Colors.blue,
-                    child: Icon(
-                      isFormulaTable ? Icons.functions : Icons.table_chart,
-                      color: Colors.white,
-                    ),
-                  ),
-                  title: Text(table['table_name'] as String),
-                  subtitle: Text('Records: ${table['record_count']}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isFormulaTable)
-                        Chip(
-                          label: Text(
-                            'Formula',
-                            style: TextStyle(fontSize: 10),
-                          ),
-                          backgroundColor: Colors.green.shade100,
-                        ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_ios),
-                    ],
-                  ),
-                  onTap: () => _showTableData(table['table_name'] as String),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  void _showTableData(String tableName) {
-    _showMessage('ดูข้อมูล Table: $tableName (ฟีเจอร์นี้จะพัฒนาต่อ)');
-  }
-
-  void _showMessage(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: Duration(seconds: 2)),
-      );
-    }
   }
 }
