@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'GenericCRUDProvider.dart';
 
 /// Provider สำหรับจัดการ Formula และ Database ของตัวเอง
@@ -53,6 +53,7 @@ class FormulaProvider extends ChangeNotifier {
   }
 
   /// เริ่มต้น database
+  /// เริ่มต้น database
   Future<void> _initializeDatabase() async {
     if (_crudProvider == null) {
       _setError('CrudProvider not configured');
@@ -73,6 +74,7 @@ class FormulaProvider extends ChangeNotifier {
           'column_count': 'INTEGER NOT NULL',
           'column_names': 'TEXT NOT NULL', // JSON string of column names
           'description': 'TEXT',
+          'icon_path': 'TEXT DEFAULT "assets/icons/cat.ico"', // เพิ่มบรรทัดนี้
           'status': 'TEXT DEFAULT "active"',
         },
       );
@@ -80,9 +82,25 @@ class FormulaProvider extends ChangeNotifier {
       // เรียกใช้ GenericCRUDProvider เพื่อ initialize database
       await _crudProvider!.initializeDatabase(
         customDatabaseName: 'formula_app.db',
-        customVersion: 1,
+        customVersion: 1, // คืนเป็น 1
         initialTables: [formulaTable],
       );
+
+      // ลองเพิ่ม icon_path column หาก table มีอยู่แล้วแต่ไม่มี column นี้
+      try {
+        final database = _crudProvider!.database;
+        if (database != null) {
+          await database.execute(
+            'ALTER TABLE formulas ADD COLUMN icon_path TEXT DEFAULT "assets/icons/cat.ico"',
+          );
+          debugPrint(
+            '✅ [FormulaProvider] Added icon_path column to existing table',
+          );
+        }
+      } catch (e) {
+        // Column อาจมีอยู่แล้ว หรือ table ยังไม่ถูกสร้าง - ไม่ต้องทำอะไร
+        debugPrint('ℹ️ [FormulaProvider] icon_path column handling: $e');
+      }
 
       _isInitialized = true;
       debugPrint('✅ [FormulaProvider] Database initialized');
@@ -150,6 +168,7 @@ class FormulaProvider extends ChangeNotifier {
     required int columnCount,
     required List<String> columnNames,
     String? description,
+    String iconPath = 'assets/icons/cat.ico', // เปลี่ยนเป็น optional
   }) async {
     if (_crudProvider == null) {
       _setError('CrudProvider not configured');
@@ -196,11 +215,15 @@ class FormulaProvider extends ChangeNotifier {
         'column_count': columnCount,
         'column_names': columnNames.join('|'), // ใช้ | เป็น separator
         'description': description?.trim() ?? '',
+        'icon_path': iconPath, // เพิ่มบรรทัดนี้!
         'status': 'active',
       };
 
       // สร้าง formula record
-      final formulaId = await _crudProvider!.create(_formulaTableName, formulaData);
+      final formulaId = await _crudProvider!.create(
+        _formulaTableName,
+        formulaData,
+      );
 
       if (formulaId != null) {
         debugPrint('✅ [FormulaProvider] Formula created with ID: $formulaId');
@@ -225,9 +248,13 @@ class FormulaProvider extends ChangeNotifier {
   }
 
   /// สร้าง table สำหรับ formula
-  Future<void> _createFormulaTable(String formulaName, List<String> columnNames) async {
+  Future<void> _createFormulaTable(
+    String formulaName,
+    List<String> columnNames,
+  ) async {
     try {
-      final tableName = 'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
+      final tableName =
+          'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
 
       // สร้าง schema สำหรับ formula table
       final Map<String, String> extraColumns = {};
@@ -265,12 +292,16 @@ class FormulaProvider extends ChangeNotifier {
       debugPrint('🗑️ [FormulaProvider] Deleting formula: $formulaName');
 
       // ลบ formula record
-      final success = await _crudProvider!.deleteById(_formulaTableName, formulaId);
+      final success = await _crudProvider!.deleteById(
+        _formulaTableName,
+        formulaId,
+      );
 
       if (success) {
         // ลบ table ที่เกี่ยวข้อง (optional - อาจจะเก็บไว้)
         try {
-          final tableName = 'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
+          final tableName =
+              'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
           await _crudProvider!.dropTable(tableName);
           debugPrint('✅ [FormulaProvider] Formula table dropped: $tableName');
         } catch (e) {
@@ -306,11 +337,16 @@ class FormulaProvider extends ChangeNotifier {
       // ดึงรายชื่อ tables จาก database
       final tables = await _crudProvider!.getAllTableNames();
 
-      _databaseTables = tables.map((tableName) => {
-        'table_name': tableName,
-        'is_formula_table': tableName.startsWith('formula_'),
-        'record_count': 0, // จะได้ count จริงใน future
-      }).toList();
+      _databaseTables =
+          tables
+              .map(
+                (tableName) => {
+                  'table_name': tableName,
+                  'is_formula_table': tableName.startsWith('formula_'),
+                  'record_count': 0, // จะได้ count จริงใน future
+                },
+              )
+              .toList();
 
       // นับจำนวน records ในแต่ละ table
       for (int i = 0; i < _databaseTables.length; i++) {
@@ -319,12 +355,16 @@ class FormulaProvider extends ChangeNotifier {
           final count = await _crudProvider!.count(tableName);
           _databaseTables[i]['record_count'] = count;
         } catch (e) {
-          debugPrint('⚠️ [FormulaProvider] Could not count records in ${_databaseTables[i]['table_name']}: $e');
+          debugPrint(
+            '⚠️ [FormulaProvider] Could not count records in ${_databaseTables[i]['table_name']}: $e',
+          );
           _databaseTables[i]['record_count'] = 0;
         }
       }
 
-      debugPrint('📊 [FormulaProvider] Loaded ${_databaseTables.length} tables');
+      debugPrint(
+        '📊 [FormulaProvider] Loaded ${_databaseTables.length} tables',
+      );
       notifyListeners();
     } catch (e) {
       _setError('Failed to load database tables: $e');
@@ -345,7 +385,9 @@ class FormulaProvider extends ChangeNotifier {
         limit: 100, // จำกัดไม่เกิน 100 records เพื่อป้องกัน performance issue
       );
 
-      debugPrint('📊 [FormulaProvider] Retrieved ${data.length} records from $tableName');
+      debugPrint(
+        '📊 [FormulaProvider] Retrieved ${data.length} records from $tableName',
+      );
       return data;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get table data error: $e');
@@ -362,7 +404,9 @@ class FormulaProvider extends ChangeNotifier {
 
       final columns = await _crudProvider!.getTableColumns(tableName);
 
-      debugPrint('📊 [FormulaProvider] Retrieved ${columns.length} columns from $tableName');
+      debugPrint(
+        '📊 [FormulaProvider] Retrieved ${columns.length} columns from $tableName',
+      );
       return columns;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get table columns error: $e');
@@ -407,7 +451,11 @@ class FormulaProvider extends ChangeNotifier {
     if (_crudProvider == null) return false;
 
     try {
-      final success = await _crudProvider!.updateById(tableName, recordId, data);
+      final success = await _crudProvider!.updateById(
+        tableName,
+        recordId,
+        data,
+      );
       return success;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Update record error: $e');
@@ -450,7 +498,9 @@ class FormulaProvider extends ChangeNotifier {
   List<String> getFormulaNames() {
     try {
       final names = _formulas.map((formula) => formula.formulaName).toList();
-      debugPrint('📝 [FormulaProvider] Got ${names.length} formula names: $names');
+      debugPrint(
+        '📝 [FormulaProvider] Got ${names.length} formula names: $names',
+      );
       return names;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get formula names error: $e');
@@ -461,15 +511,22 @@ class FormulaProvider extends ChangeNotifier {
   /// ดึงรายชื่อ formulas พร้อม ID สำหรับ dropdown ที่ต้องการ value
   List<Map<String, dynamic>> getFormulaDropdownItems() {
     try {
-      final items = _formulas.map((formula) => {
-        'id': formula.formulaId,
-        'name': formula.formulaName,
-        'value': formula.formulaName, // สำหรับ DropdownButton value
-        'columnCount': formula.columnCount,
-        'description': formula.description,
-      }).toList();
-      
-      debugPrint('📝 [FormulaProvider] Got ${items.length} formula dropdown items');
+      final items =
+          _formulas
+              .map(
+                (formula) => {
+                  'id': formula.formulaId,
+                  'name': formula.formulaName,
+                  'value': formula.formulaName, // สำหรับ DropdownButton value
+                  'columnCount': formula.columnCount,
+                  'description': formula.description,
+                },
+              )
+              .toList();
+
+      debugPrint(
+        '📝 [FormulaProvider] Got ${items.length} formula dropdown items',
+      );
       return items;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get formula dropdown items error: $e');
@@ -480,10 +537,13 @@ class FormulaProvider extends ChangeNotifier {
   /// ดึงรายชื่อ tables ทั้งหมดสำหรับ dropdown
   List<String> getTableNames() {
     try {
-      final names = _databaseTables
-          .map((table) => table['table_name'] as String)
-          .toList();
-      debugPrint('📝 [FormulaProvider] Got ${names.length} table names: $names');
+      final names =
+          _databaseTables
+              .map((table) => table['table_name'] as String)
+              .toList();
+      debugPrint(
+        '📝 [FormulaProvider] Got ${names.length} table names: $names',
+      );
       return names;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get table names error: $e');
@@ -494,11 +554,14 @@ class FormulaProvider extends ChangeNotifier {
   /// ดึงรายชื่อ formula tables เท่านั้นสำหรับ dropdown
   List<String> getFormulaTableNames() {
     try {
-      final names = _databaseTables
-          .where((table) => table['is_formula_table'] as bool)
-          .map((table) => table['table_name'] as String)
-          .toList();
-      debugPrint('📝 [FormulaProvider] Got ${names.length} formula table names: $names');
+      final names =
+          _databaseTables
+              .where((table) => table['is_formula_table'] as bool)
+              .map((table) => table['table_name'] as String)
+              .toList();
+      debugPrint(
+        '📝 [FormulaProvider] Got ${names.length} formula table names: $names',
+      );
       return names;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get formula table names error: $e');
@@ -509,12 +572,18 @@ class FormulaProvider extends ChangeNotifier {
   /// ดึงรายชื่อ category tables เท่านั้นสำหรับ dropdown
   List<String> getCategoryTableNames() {
     try {
-      final names = _databaseTables
-          .where((table) => !(table['is_formula_table'] as bool) && 
-                           table['table_name'] != 'android_metadata')
-          .map((table) => table['table_name'] as String)
-          .toList();
-      debugPrint('📝 [FormulaProvider] Got ${names.length} category table names: $names');
+      final names =
+          _databaseTables
+              .where(
+                (table) =>
+                    !(table['is_formula_table'] as bool) &&
+                    table['table_name'] != 'android_metadata',
+              )
+              .map((table) => table['table_name'] as String)
+              .toList();
+      debugPrint(
+        '📝 [FormulaProvider] Got ${names.length} category table names: $names',
+      );
       return names;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get category table names error: $e');
@@ -529,12 +598,12 @@ class FormulaProvider extends ChangeNotifier {
         (f) => f.formulaName == formulaName,
         orElse: () => {},
       );
-      
+
       if (formula.isEmpty) {
         debugPrint('⚠️ [FormulaProvider] Formula "$formulaName" not found');
         return null;
       }
-      
+
       debugPrint('✅ [FormulaProvider] Found formula: $formulaName');
       return formula;
     } catch (e) {
@@ -550,13 +619,15 @@ class FormulaProvider extends ChangeNotifier {
         (f) => f.formulaId == formulaId,
         orElse: () => {},
       );
-      
+
       if (formula.isEmpty) {
         debugPrint('⚠️ [FormulaProvider] Formula with ID $formulaId not found');
         return null;
       }
-      
-      debugPrint('✅ [FormulaProvider] Found formula ID $formulaId: ${formula.formulaName}');
+
+      debugPrint(
+        '✅ [FormulaProvider] Found formula ID $formulaId: ${formula.formulaName}',
+      );
       return formula;
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Get formula by ID error: $e');
@@ -570,18 +641,20 @@ class FormulaProvider extends ChangeNotifier {
       final totalFormulas = _formulas.length;
       final activeFormulas = _formulas.where((f) => f.isActive).length;
       final totalTables = _databaseTables.length;
-      final formulaTables = _databaseTables.where((t) => t['is_formula_table'] as bool).length;
-      
+      final formulaTables =
+          _databaseTables.where((t) => t['is_formula_table'] as bool).length;
+
       final stats = {
         'totalFormulas': totalFormulas,
         'activeFormulas': activeFormulas,
         'inactiveFormulas': totalFormulas - activeFormulas,
         'totalTables': totalTables,
         'formulaTables': formulaTables,
-        'categoryTables': totalTables - formulaTables - 1, // -1 for android_metadata
+        'categoryTables':
+            totalTables - formulaTables - 1, // -1 for android_metadata
         'hasData': totalFormulas > 0,
       };
-      
+
       debugPrint('📊 [FormulaProvider] Formula statistics: $stats');
       return stats;
     } catch (e) {
@@ -608,29 +681,33 @@ class FormulaProvider extends ChangeNotifier {
     }
 
     try {
-      debugPrint('🔍 [FormulaProvider] === PRINTING ALL TABLES FROM formula_app.db ===');
-      
+      debugPrint(
+        '🔍 [FormulaProvider] === PRINTING ALL TABLES FROM formula_app.db ===',
+      );
+
       // ดึงรายชื่อ tables ทั้งหมด
       final tables = await _crudProvider!.getAllTableNames();
-      
-      debugPrint('📊 [FormulaProvider] Found ${tables.length} tables in database');
+
+      debugPrint(
+        '📊 [FormulaProvider] Found ${tables.length} tables in database',
+      );
       debugPrint('');
-      
+
       for (int i = 0; i < tables.length; i++) {
         final tableName = tables[i];
-        
-        debugPrint('🏷️ [${ i + 1}/${tables.length}] TABLE: $tableName');
+
+        debugPrint('🏷️ [${i + 1}/${tables.length}] TABLE: $tableName');
         debugPrint('─' * 50);
-        
+
         try {
           // ดึง schema ของ table
           final columns = await _crudProvider!.getTableColumns(tableName);
           debugPrint('📋 Columns (${columns.length}): ${columns.join(", ")}');
-          
+
           // นับจำนวน records
           final recordCount = await _crudProvider!.count(tableName);
           debugPrint('📊 Record Count: $recordCount');
-          
+
           if (recordCount > 0) {
             // ดึงข้อมูลตัวอย่าง (แค่ 5 records แรก)
             final sampleData = await _crudProvider!.readAll(
@@ -638,30 +715,28 @@ class FormulaProvider extends ChangeNotifier {
               limit: 5,
               orderBy: 'created_at DESC',
             );
-            
+
             debugPrint('📝 Sample Data (first ${sampleData.length} records):');
-            
+
             for (int j = 0; j < sampleData.length; j++) {
               final record = sampleData[j];
-              debugPrint('   [${ j + 1}] ${_formatRecord(record, columns)}');
+              debugPrint('   [${j + 1}] ${_formatRecord(record, columns)}');
             }
-            
+
             if (recordCount > 5) {
               debugPrint('   ... และอีก ${recordCount - 5} records');
             }
           } else {
             debugPrint('📝 No data in this table');
           }
-          
         } catch (e) {
           debugPrint('❌ Error reading table $tableName: $e');
         }
-        
+
         debugPrint(''); // บรรทัดว่าง
       }
-      
+
       debugPrint('✅ [FormulaProvider] === FINISHED PRINTING ALL TABLES ===');
-      
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Print all tables error: $e');
     }
@@ -670,11 +745,11 @@ class FormulaProvider extends ChangeNotifier {
   /// จัดรูปแบบ record สำหรับการแสดงผล
   String _formatRecord(Map<String, dynamic> record, List<String> columns) {
     final parts = <String>[];
-    
+
     for (final column in columns) {
       final value = record[column];
       String displayValue;
-      
+
       if (value == null) {
         displayValue = 'NULL';
       } else if (value is String && value.length > 20) {
@@ -684,10 +759,10 @@ class FormulaProvider extends ChangeNotifier {
       } else {
         displayValue = value.toString();
       }
-      
+
       parts.add('$column: $displayValue');
     }
-    
+
     return '{${parts.join(", ")}}';
   }
 
@@ -700,30 +775,30 @@ class FormulaProvider extends ChangeNotifier {
 
     try {
       debugPrint('🔍 [FormulaProvider] === PRINTING TABLE: $tableName ===');
-      
+
       // ตรวจสอบว่า table มีอยู่หรือไม่
       final tableExists = await _crudProvider!.tableExists(tableName);
       if (!tableExists) {
         debugPrint('❌ Table "$tableName" does not exist');
         return;
       }
-      
+
       // ดึง schema
       final columns = await _crudProvider!.getTableColumns(tableName);
       debugPrint('📋 Columns (${columns.length}): ${columns.join(", ")}');
-      
+
       // นับจำนวน records
       final recordCount = await _crudProvider!.count(tableName);
       debugPrint('📊 Total Records: $recordCount');
       debugPrint('');
-      
+
       if (recordCount > 0) {
         // ดึงข้อมูลทั้งหมด
         final allData = await _crudProvider!.readAll(
           tableName,
           orderBy: 'created_at DESC',
         );
-        
+
         debugPrint('📝 All Records:');
         for (int i = 0; i < allData.length; i++) {
           final record = allData[i];
@@ -732,9 +807,8 @@ class FormulaProvider extends ChangeNotifier {
       } else {
         debugPrint('📝 No data in this table');
       }
-      
+
       debugPrint('✅ [FormulaProvider] === FINISHED PRINTING TABLE ===');
-      
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Print table error: $e');
     }
@@ -749,20 +823,22 @@ class FormulaProvider extends ChangeNotifier {
 
     try {
       debugPrint('🔍 [FormulaProvider] === PRINTING FORMULA TABLES ONLY ===');
-      
+
       final tables = await _crudProvider!.getAllTableNames();
-      final formulaTables = tables.where((name) => name.startsWith('formula_')).toList();
-      
+      final formulaTables =
+          tables.where((name) => name.startsWith('formula_')).toList();
+
       debugPrint('📊 Found ${formulaTables.length} formula tables');
       debugPrint('');
-      
+
       for (final tableName in formulaTables) {
         await printSpecificTable(tableName);
         debugPrint(''); // บรรทัดว่าง
       }
-      
-      debugPrint('✅ [FormulaProvider] === FINISHED PRINTING FORMULA TABLES ===');
-      
+
+      debugPrint(
+        '✅ [FormulaProvider] === FINISHED PRINTING FORMULA TABLES ===',
+      );
     } catch (e) {
       debugPrint('❌ [FormulaProvider] Print formula tables error: $e');
     }
@@ -794,7 +870,9 @@ class FormulaProvider extends ChangeNotifier {
       );
 
       _formulas = results;
-      debugPrint('📊 [FormulaProvider] Found ${_formulas.length} matching formulas');
+      debugPrint(
+        '📊 [FormulaProvider] Found ${_formulas.length} matching formulas',
+      );
       notifyListeners();
     } catch (e) {
       _setError('Search failed: $e');

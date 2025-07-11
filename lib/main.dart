@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/pages/CardTest.dart' show Cardtest;
+import 'package:try_bluetooth/providers/CardTestProvider.dart';
 import 'package:try_bluetooth/providers/DeviceConnectionProvider.dart';
 
 import 'pages/DisplayHomePage.dart';
@@ -25,6 +26,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => DisplayHomeProvider()),
         ChangeNotifierProvider(create: (_) => DeviceConnectionProvider()),
         ChangeNotifierProvider(create: (_) => BottomNavigationBarProvider()),
+        ChangeNotifierProvider(create: (_) => CardTestProvider()),
       ],
       child: const MyApp(),
     ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/providers/FormulaProvider.dart';
-import 'package:try_bluetooth/providers/GenericCRUDProvider.dart';
 
 class FormulaWidget extends StatefulWidget {
   @override
@@ -871,6 +870,7 @@ class _FormulaWidgetState extends State<FormulaWidget> {
         columnCount: columnCount,
         columnNames: columnNames,
         description: descriptionController.text.trim(),
+        iconPath: '',
       );
 
       if (success) {
