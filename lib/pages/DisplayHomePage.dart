@@ -1,11 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/providers/DisplayHomeProvider.dart';
 import 'package:try_bluetooth/providers/FormulaProvider.dart';
 import 'package:try_bluetooth/providers/SettingProvider.dart';
-import 'package:try_bluetooth/providers/GenericCRUDProvider.dart';
-import 'dart:async';
 
 class DisplayHomePage extends StatefulWidget {
   const DisplayHomePage({Key? key}) : super(key: key);
@@ -18,17 +18,20 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     with WidgetsBindingObserver {
   Timer? _autoSaveTimer;
 
-  // ⚡ Auto Save ใหม่ - ใช้สถานะจากเครื่อง
+  // ⚡ Auto Save - ใช้สถานะจากเครื่อง
   static const Duration _autoSaveInterval = Duration(
     milliseconds: 100,
   ); // เช็คบ่อยๆ เพื่อจับ S status
 
-  // ตัวแปรสำหรับ Auto Save Logic แบบใหม่
+  // ตัวแปรสำหรับ Auto Save Logic
   bool _hasAutoSavedInThisCycle = false;
   String _lastRawData = '';
   double? _lastSavedWeight;
-  bool _isCurrentlyStable = false; // สถานะปัจจุบันว่า stable หรือไม่
-  bool _wasStableInPreviousCheck = false; // สถานะก่อนหน้า
+  bool _isCurrentlyStable = false;
+  bool _wasStableInPreviousCheck = false;
+  bool _hasStartedFromZero = false;
+  double? _s0; // สำหรับเก็บค่าเมื่อ input == S00.00
+  double? _s1; // สำหรับเก็บค่าเมื่อ stable และ weight >= 0.0
 
   // 💾 Cache สำหรับ Database Operations
   Map<String, List<String>> _tableColumnsCache = {};
@@ -156,7 +159,7 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     }
   }
 
-  // ⚡ Auto Save ใหม่ - ใช้สถานะจากเครื่อง
+  // ⚡ Auto Save - ปรับตามเงื่อนไขใหม่
   void _startAutoSaveWithStableDetection() {
     _autoSaveTimer?.cancel();
 
@@ -166,6 +169,9 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     _lastSavedWeight = null;
     _isCurrentlyStable = false;
     _wasStableInPreviousCheck = false;
+    _hasStartedFromZero = false;
+    _s0 = null;
+    _s1 = null;
 
     _autoSaveTimer = Timer.periodic(_autoSaveInterval, (timer) async {
       final displayProvider = Provider.of<DisplayHomeProvider>(
@@ -193,8 +199,7 @@ class _DisplayHomePageState extends State<DisplayHomePage>
       }
 
       // ดึงข้อมูล raw จาก SettingProvider
-      String? currentRawData =
-          settingProvider.rawReceivedText; // สมมติว่ามีตัวแปรนี้
+      String? currentRawData = settingProvider.rawReceivedText;
 
       if (currentRawData == null || currentRawData.isEmpty) {
         return;
@@ -228,37 +233,44 @@ class _DisplayHomePageState extends State<DisplayHomePage>
       _wasStableInPreviousCheck = _isCurrentlyStable;
       _isCurrentlyStable = isStable;
 
-      // ตรวจสอบการรีเซ็ต cycle (เมื่อน้ำหนักกลับไปที่ 0 หรือใกล้ 0)
-      if (weight <= 0.1) {
+      // รีเซ็ต cycle เมื่อน้ำหนักกลับไปที่ S00.00
+      if (isStable && weight == 0.0) {
         if (_hasAutoSavedInThisCycle) {
           _resetAutoSaveCycle();
         }
-        return;
+        _s0 = 0.0; // ตั้งค่า _s0 เมื่อ input == S00.00
+        print('📌 [AUTO SAVE] S[0] set to 0.00 (input is S00.00)');
       }
 
-      // ⚡ เงื่อนไขการบันทึกแบบใหม่: บันทึกทันทีเมื่อเครื่องบอกว่า Stable
-      if (isStable && !_hasAutoSavedInThisCycle && weight > 0.1) {
-        print('✅ [AUTO SAVE] MACHINE STABLE DETECTED!');
-        print('   Weight: ${weight.toStringAsFixed(2)} kg (from machine)');
-        print('   Status: $status (stable signal from device)');
+      // ตั้งค่า _s1 เมื่อ stable และน้ำหนัก >= 0.0
+      if (isStable && weight >= 0.0) {
+        _s1 = weight;
+        print('📌 [AUTO SAVE] S[1] set to ${weight.toStringAsFixed(2)}');
+      }
+
+      // บันทึกเมื่อ _s0 == 0.0 และ _s1 ไม่เป็น null และ _s1 != 0.0
+      if (_s0 == 0.0 && _s1 != null && _s1 != 0.0 && !_hasAutoSavedInThisCycle) {
+        print('✅ [AUTO SAVE] Condition met: S[0] == 0.00 && S[1] non-zero');
+        print('   S[0]: $_s0');
+        print('   S[1]: ${_s1?.toStringAsFixed(2)}');
 
         try {
-          // บันทึกทันที
+          // บันทึกน้ำหนัก _s1
           await _insertWeightWithMachineStable(
             context,
             displayProvider,
             formulaProvider,
             settingProvider,
-            weightToSave: weight,
+            weightToSave: _s1!,
             tareValue: tare,
             rawData: currentRawData,
           );
 
           _hasAutoSavedInThisCycle = true;
-          _lastSavedWeight = weight;
+          _lastSavedWeight = _s1;
 
-          print('💾 [AUTO SAVE] MACHINE STABLE SAVE SUCCESS!');
-          print('   Saved Weight: ${weight.toStringAsFixed(2)} kg');
+          print('💾 [AUTO SAVE] Save SUCCESS!');
+          print('   Saved Weight: ${_s1!.toStringAsFixed(2)} kg');
           print('   Tare: ${tare.toStringAsFixed(2)} kg');
           print('   Raw Data: $currentRawData');
 
@@ -266,7 +278,7 @@ class _DisplayHomePageState extends State<DisplayHomePage>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  '🎯 Machine Stable: ${weight.toStringAsFixed(2)} kg saved!',
+                  '🎯 Saved: ${_s1!.toStringAsFixed(2)} kg!',
                 ),
                 backgroundColor: Colors.green,
                 duration: const Duration(seconds: 2),
@@ -274,30 +286,20 @@ class _DisplayHomePageState extends State<DisplayHomePage>
             );
           }
         } catch (e) {
-          print('❌ [AUTO SAVE] MACHINE STABLE SAVE FAILED: $e');
-        }
-      } else if (_hasAutoSavedInThisCycle) {
-        // แสดงสถานะรอ reset
-        if (isStable) {
-          print(
-            '⏸️ [AUTO SAVE] Already saved (${_lastSavedWeight?.toStringAsFixed(2)} kg), waiting for reset...',
-          );
+          print('❌ [AUTO SAVE] Save FAILED: $e');
         }
       } else {
-        // แสดงสถานะรอ stable
-        if (!isStable) {
-          print('⏳ [AUTO SAVE] Waiting for STABLE signal from machine...');
-        }
+        print('⏳ [AUTO SAVE] Waiting for condition: S[0] == 0.00 && S[1] non-zero');
+        print('   Current S[0]: $_s0');
+        print('   Current S[1]: ${_s1?.toStringAsFixed(2)}');
+        print('   Has saved: $_hasAutoSavedInThisCycle');
       }
     });
 
-    print('🟢 [AUTO SAVE] MACHINE STABLE MODE Started');
+    print('🟢 [AUTO SAVE] Started');
     print('📋 [AUTO SAVE] Configuration:');
     print('   - Check interval: ${_autoSaveInterval.inMilliseconds} ms');
-    print('   - Save trigger: Machine sends "S" (Stable) signal');
-    print('   - No counting/averaging needed');
-    print('   - Instant save on stable detection');
-    print('   - Reset when: Weight returns to near zero');
+    print('   - Save condition: S[0] == 0.00 && S[1] non-zero');
   }
 
   // 🔄 รีเซ็ต cycle
@@ -313,8 +315,11 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     _isCurrentlyStable = false;
     _wasStableInPreviousCheck = false;
     _lastRawData = '';
+    _hasStartedFromZero = true;
+    _s0 = null;
+    _s1 = null;
 
-    print('✅ [AUTO SAVE] Reset complete - ready for next stable signal');
+    print('✅ [AUTO SAVE] Reset complete - ready for next cycle');
   }
 
   // ฟังก์ชันหยุด auto save
@@ -328,6 +333,9 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     _lastSavedWeight = null;
     _isCurrentlyStable = false;
     _wasStableInPreviousCheck = false;
+    _hasStartedFromZero = false;
+    _s0 = null;
+    _s1 = null;
 
     print('🔴 [AUTO SAVE] Stopped and reset all states');
   }
@@ -343,7 +351,7 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     required String rawData,
   }) async {
     try {
-      print('🔄 [MACHINE STABLE SAVE] Starting optimized weight insertion...');
+      print('🔄 [SAVE] Starting optimized weight insertion...');
 
       final selectedFormulaName = displayProvider.selectedFormula!;
       final deviceName =
@@ -354,14 +362,14 @@ class _DisplayHomePageState extends State<DisplayHomePage>
           'formula_${selectedFormulaName.toLowerCase().replaceAll(' ', '_')}';
 
       print(
-        '⚖️ [MACHINE STABLE SAVE] Weight: ${weightToSave.toStringAsFixed(2)} kg',
+        '⚖️ [SAVE] Weight: ${weightToSave.toStringAsFixed(2)} kg',
       );
       print(
-        '🔧 [MACHINE STABLE SAVE] Tare: ${tareValue.toStringAsFixed(2)} kg',
+        '🔧 [SAVE] Tare: ${tareValue.toStringAsFixed(2)} kg',
       );
-      print('📱 [MACHINE STABLE SAVE] Device: $deviceName');
-      print('🕐 [MACHINE STABLE SAVE] Timestamp: $timestamp');
-      print('📊 [MACHINE STABLE SAVE] Raw Data: $rawData');
+      print('📱 [SAVE] Device: $deviceName');
+      print('🕐 [SAVE] Timestamp: $timestamp');
+      print('📊 [SAVE] Raw Data: $rawData');
 
       // ตรวจสอบ formula
       final formulaDetails = formulaProvider.getFormulaByName(
@@ -372,13 +380,13 @@ class _DisplayHomePageState extends State<DisplayHomePage>
       }
 
       print('✅ [FormulaProvider] Found formula: $selectedFormulaName');
-      print('📋 [MACHINE STABLE SAVE] Table: $tableName');
+      print('📋 [SAVE] Table: $tableName');
 
       // 💾 ใช้ cache สำหรับ table columns
       List<String> existingColumns;
       if (_tableColumnsCache.containsKey(tableName)) {
         existingColumns = _tableColumnsCache[tableName]!;
-        print('💾 [MACHINE STABLE SAVE] Using cached columns');
+        print('💾 [SAVE] Using cached columns');
       } else {
         existingColumns = await formulaProvider.getTableColumns(tableName);
         _tableColumnsCache[tableName] = existingColumns;
@@ -387,12 +395,12 @@ class _DisplayHomePageState extends State<DisplayHomePage>
           '📊 [FormulaProvider] Retrieved ${existingColumns.length} columns from $tableName',
         );
         print(
-          '🔍 [MACHINE STABLE SAVE] Cached columns for future use: $existingColumns',
+          '🔍 [SAVE] Cached columns for future use: $existingColumns',
         );
       }
 
       print(
-        '🏷️ [MACHINE STABLE SAVE] Existing columns in database: $existingColumns',
+        '🏷️ [SAVE] Existing columns in database: $existingColumns',
       );
 
       // 💾 ใช้ cache สำหรับ weight column check
@@ -406,7 +414,7 @@ class _DisplayHomePageState extends State<DisplayHomePage>
         _hasWeightColumnCache[tableName] = hasWeightColumn;
       }
 
-      print('🔍 [MACHINE STABLE SAVE] Has weight column: $hasWeightColumn');
+      print('🔍 [SAVE] Has weight column: $hasWeightColumn');
 
       // 📝 เตรียมข้อมูลพร้อมข้อมูลเพิ่มเติม
       final Map<String, dynamic> dataToInsert = {};
@@ -417,38 +425,38 @@ class _DisplayHomePageState extends State<DisplayHomePage>
         if (lowerColumnName.contains('weight')) {
           dataToInsert[columnName] = weightToSave;
           print(
-            '⚖️ [MACHINE STABLE SAVE] Inserted weight: $weightToSave -> $columnName',
+            '⚖️ [SAVE] Inserted weight: $weightToSave -> $columnName',
           );
         } else if (lowerColumnName.contains('tare')) {
           dataToInsert[columnName] = tareValue;
           print(
-            '🔧 [MACHINE STABLE SAVE] Inserted tare: $tareValue -> $columnName',
+            '🔧 [SAVE] Inserted tare: $tareValue -> $columnName',
           );
         } else if (lowerColumnName.contains('time') ||
             lowerColumnName.contains('date') ||
             lowerColumnName == 'updated_at') {
           dataToInsert[columnName] = timestamp;
-          print('🕐 [MACHINE STABLE SAVE] Inserted timestamp -> $columnName');
+          print('🕐 [SAVE] Inserted timestamp -> $columnName');
         } else if (lowerColumnName.contains('device')) {
           dataToInsert[columnName] = deviceName;
-          print('📱 [MACHINE STABLE SAVE] Inserted device -> $columnName');
+          print('📱 [SAVE] Inserted device -> $columnName');
         } else if (lowerColumnName.contains('raw') ||
             lowerColumnName.contains('data')) {
           dataToInsert[columnName] = rawData;
-          print('📊 [MACHINE STABLE SAVE] Inserted raw data -> $columnName');
+          print('📊 [SAVE] Inserted raw data -> $columnName');
         } else if (lowerColumnName.contains('status')) {
           dataToInsert[columnName] = 'STABLE';
-          print('✅ [MACHINE STABLE SAVE] Inserted status -> $columnName');
+          print('✅ [SAVE] Inserted status -> $columnName');
         } else if (lowerColumnName != 'id' &&
             lowerColumnName != 'created_at' &&
             lowerColumnName != 'updated_at') {
           dataToInsert[columnName] =
               'Auto-${DateTime.now().millisecondsSinceEpoch}';
-          print('📝 [MACHINE STABLE SAVE] Inserted default -> $columnName');
+          print('📝 [SAVE] Inserted default -> $columnName');
         }
       }
 
-      print('💾 [MACHINE STABLE SAVE] Final data to insert: $dataToInsert');
+      print('💾 [SAVE] Final data to insert: $dataToInsert');
 
       // 💾 บันทึกลง database
       final success = await formulaProvider.createRecord(
@@ -457,21 +465,21 @@ class _DisplayHomePageState extends State<DisplayHomePage>
       );
 
       if (success) {
-        print('✅ [MACHINE STABLE SAVE] Weight data saved successfully!');
+        print('✅ [SAVE] Weight data saved successfully!');
         print(
-          '📊 [MACHINE STABLE SAVE] Weight: ${weightToSave.toStringAsFixed(2)} kg',
+          '📊 [SAVE] Weight: ${weightToSave.toStringAsFixed(2)} kg',
         );
         print(
-          '🔧 [MACHINE STABLE SAVE] Tare: ${tareValue.toStringAsFixed(2)} kg',
+          '🔧 [SAVE] Tare: ${tareValue.toStringAsFixed(2)} kg',
         );
-        print('📋 [MACHINE STABLE SAVE] Formula: $selectedFormulaName');
-        print('📊 [MACHINE STABLE SAVE] Raw: $rawData');
+        print('📋 [SAVE] Formula: $selectedFormulaName');
+        print('📊 [SAVE] Raw: $rawData');
       } else {
-        print('❌ [MACHINE STABLE SAVE] Failed to save weight data');
+        print('❌ [SAVE] Failed to save weight data');
         throw Exception('Database save failed');
       }
     } catch (e) {
-      print('❌ [MACHINE STABLE SAVE] Error: $e');
+      print('❌ [SAVE] Error: $e');
       throw e;
     }
   }
@@ -538,7 +546,6 @@ class _DisplayHomePageState extends State<DisplayHomePage>
         print('📊 [MANUAL SAVE] Raw data: $rawData');
       }
 
-      // ใช้ machine stable function สำหรับ manual save ด้วย
       await _insertWeightWithMachineStable(
         context,
         displayProvider,
@@ -1084,17 +1091,17 @@ class _DisplayHomePageState extends State<DisplayHomePage>
               return;
             }
 
-            // เริ่ม auto save แบบใหม่
+            // เริ่ม auto save
             displayProvider.setAutoSaveMode(true);
             _startAutoSaveWithStableDetection();
 
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  '🎯 Smart Auto Save started - saves instantly when machine signals STABLE',
+                  '🎯 Smart Auto Save started - Waiting for conditions',
                 ),
                 backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
+                duration: Duration(seconds: 4),
               ),
             );
           }
@@ -1103,7 +1110,7 @@ class _DisplayHomePageState extends State<DisplayHomePage>
     );
   }
 
-  // 📊 แสดงสถานะ Auto Save แบบใหม่
+  // 📊 แสดงสถานะ Auto Save
   Widget _buildAutoSaveStatus() {
     return Consumer<DisplayHomeProvider>(
       builder: (context, displayProvider, _) {
@@ -1148,25 +1155,6 @@ class _DisplayHomePageState extends State<DisplayHomePage>
                     ),
                   ),
                 ],
-              ),
-              // แสดงสถานะเพิ่มเติม
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  _hasAutoSavedInThisCycle
-                      ? 'Saved! (${_lastSavedWeight?.toStringAsFixed(2)} kg) - Waiting for reset'
-                      : _autoSaveTimer?.isActive == true
-                      ? 'Monitoring for STABLE signal from machine...'
-                      : 'Long press to restart',
-                  style: TextStyle(
-                    color:
-                        _autoSaveTimer?.isActive == true
-                            ? Colors.blue[200]
-                            : Colors.orange[200],
-                    fontSize: 10,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
               ),
             ],
           ),

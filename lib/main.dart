@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:try_bluetooth/pages/CardTest.dart' show Cardtest;
 import 'package:try_bluetooth/providers/DeviceConnectionProvider.dart';
 
+import 'pages/DisplayHomePage.dart';
+import 'pages/SettingsPage.dart';
+import 'providers/BottomNavigationBarProvider.dart';
+import 'providers/DisplayHomeProvider.dart';
+import 'providers/DisplayProvider.dart';
+import 'providers/FormulaProvider.dart';
 import 'providers/GenericCRUDProvider.dart';
 import 'providers/GenericTestPageProvider.dart';
-import 'providers/FormulaProvider.dart';
 import 'providers/SettingProvider.dart';
-import 'providers/DisplayProvider.dart';
-import 'providers/DisplayHomeProvider.dart';
-import 'providers/BottomNavigationBarProvider.dart';
-
-import 'pages/DisplayHomePage.dart';
-import 'pages/FormulaWidget.dart';
-import 'pages/SettingsPage.dart';
 
 void main() {
   runApp(
@@ -49,7 +48,7 @@ class MainScaffold extends StatelessWidget {
 
   static final List<Widget> _pages = [
     DisplayHomePage(), // จะ initialize เอง
-    FormulaWidget(), // จะ initialize เอง
+    Cardtest(), // จะ initialize เอง
     SettingsPage(), // จะ initialize เอง
   ];
 
