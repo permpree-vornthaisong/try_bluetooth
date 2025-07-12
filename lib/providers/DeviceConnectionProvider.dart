@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -9,9 +9,9 @@ class DeviceConnectionProvider extends ChangeNotifier {
   List<BluetoothService> _services = [];
   List<Uint8List> _receivedData = [];
   StreamSubscription<BluetoothConnectionState>? _connectionStateSubscription;
-  StreamSubscription<List<int>>? _dataSubscription;
-  BluetoothCharacteristic? _writeCharacteristic;
-  BluetoothCharacteristic? _notifyCharacteristic;
+  List<StreamSubscription<List<int>>> _dataSubscriptions = []; // ⭐ เปลี่ยนเป็น List
+  List<BluetoothCharacteristic> _writeCharacteristics = []; // ⭐ เก็บทุก write characteristics
+  List<BluetoothCharacteristic> _notifyCharacteristics = []; // ⭐ เก็บทุก notify characteristics
   String _statusMessage = '';
   bool _isConnecting = false;
 
@@ -31,6 +31,10 @@ class DeviceConnectionProvider extends ChangeNotifier {
       _isConnecting = true;
       _statusMessage = 'กำลังเชื่อมต่อ...';
       notifyListeners();
+
+      if (kDebugMode) {
+        print('🔗 [DeviceConnection] Connecting to ${device.platformName}...');
+      }
 
       // ยกเลิกการเชื่อมต่อเก่า (ถ้ามี)
       await disconnect();
@@ -54,15 +58,18 @@ class DeviceConnectionProvider extends ChangeNotifier {
 
       // ค้นหา services และ characteristics
       await discoverServices();
-      if (_notifyCharacteristic != null) {
-        await startNotifications(); // เริ่มฟังข้อมูล
-      }
+      await startAllNotifications(); // ⭐ เปลี่ยนเป็น auto-detect ทุก characteristics
 
       _isConnecting = false;
       notifyListeners();
     } catch (e) {
       _isConnecting = false;
       _statusMessage = 'เชื่อมต่อล้มเหลว: $e';
+      
+      if (kDebugMode) {
+        print('❌ [DeviceConnection] Connection failed: $e');
+      }
+      
       notifyListeners();
     }
   }
@@ -74,71 +81,145 @@ class DeviceConnectionProvider extends ChangeNotifier {
       _statusMessage = 'กำลังค้นหา services...';
       notifyListeners();
 
-      _services = await _connectedDevice!.discoverServices();
+      if (kDebugMode) {
+        print('🔍 [DeviceConnection] Discovering services...');
+      }
 
-      // ค้นหา characteristics สำหรับอ่านและเขียน
+      _services = await _connectedDevice!.discoverServices();
+      _writeCharacteristics.clear();
+      _notifyCharacteristics.clear();
+
+      // ⭐ Auto-detect ทุก characteristics
       for (BluetoothService service in _services) {
+        if (kDebugMode) {
+          print('📁 [DeviceConnection] Service: ${service.uuid}');
+        }
+        
         for (BluetoothCharacteristic characteristic in service.characteristics) {
-          // ตรวจสอบ properties
-          if (characteristic.properties.write || 
-              characteristic.properties.writeWithoutResponse) {
-            _writeCharacteristic = characteristic;
+          if (kDebugMode) {
+            print('  📋 [DeviceConnection] Characteristic: ${characteristic.uuid}');
+            print('     - Properties: Read=${characteristic.properties.read}, Write=${characteristic.properties.write}, WriteNoResp=${characteristic.properties.writeWithoutResponse}, Notify=${characteristic.properties.notify}, Indicate=${characteristic.properties.indicate}');
           }
           
-          if (characteristic.properties.notify || 
-              characteristic.properties.indicate) {
-            if (characteristic.uuid.toString() == 'abcdef01-1234-5678-1234-56789abcdef0') {
-              _notifyCharacteristic = characteristic;
-              await startNotifications();
+          // เก็บ write characteristics
+          if (characteristic.properties.write || characteristic.properties.writeWithoutResponse) {
+            _writeCharacteristics.add(characteristic);
+            if (kDebugMode) {
+              print('     ✍️ [DeviceConnection] Added as write characteristic');
+            }
+          }
+          
+          // เก็บ notify characteristics
+          if (characteristic.properties.notify || characteristic.properties.indicate) {
+            _notifyCharacteristics.add(characteristic);
+            if (kDebugMode) {
+              print('     🔔 [DeviceConnection] Added as notify characteristic');
             }
           }
         }
+      }
+
+      if (kDebugMode) {
+        print('✅ [DeviceConnection] Discovery completed');
+        print('📊 [DeviceConnection] Found ${_writeCharacteristics.length} write characteristics');
+        print('📊 [DeviceConnection] Found ${_notifyCharacteristics.length} notify characteristics');
       }
 
       _statusMessage = 'พร้อมรับส่งข้อมูล';
       notifyListeners();
     } catch (e) {
       _statusMessage = 'ค้นหา services ล้มเหลว: $e';
+      
+      if (kDebugMode) {
+        print('❌ [DeviceConnection] Service discovery failed: $e');
+      }
+      
       notifyListeners();
     }
   }
 
-  Future<void> startNotifications() async {
-    if (_notifyCharacteristic == null) {
+  // ⭐ เปลี่ยนเป็น subscribe ทุก notify characteristics
+  Future<void> startAllNotifications() async {
+    if (_notifyCharacteristics.isEmpty) {
       _statusMessage = 'ไม่พบ characteristic สำหรับรับข้อมูล';
+      
+      if (kDebugMode) {
+        print('⚠️ [DeviceConnection] No notify characteristics found');
+      }
+      
       notifyListeners();
       return;
     }
 
     try {
-      await _notifyCharacteristic!.setNotifyValue(true);
-      _notifyCharacteristic!.value.listen((data) {
-        if (data.isNotEmpty) {
-          // แปลงข้อมูลที่ได้รับเป็นข้อความ
-          String receivedData = String.fromCharCodes(data);
-          debugPrint('Received Data: $receivedData');
+      // Cancel existing subscriptions
+      for (var subscription in _dataSubscriptions) {
+        subscription.cancel();
+      }
+      _dataSubscriptions.clear();
 
-          // เก็บข้อมูลใน _receivedData
-          _receivedData.add(Uint8List.fromList(data));
-
-          // เก็บแค่ 100 รายการล่าสุด
-          if (_receivedData.length > 100) {
-            _receivedData.removeAt(0);
-          }
-          notifyListeners();
+      // Subscribe to all notify characteristics
+      for (var characteristic in _notifyCharacteristics) {
+        if (kDebugMode) {
+          print('🔔 [DeviceConnection] Subscribing to ${characteristic.uuid}');
         }
-      });
-      _statusMessage = 'เริ่มรับข้อมูลสำเร็จ';
+        
+        await characteristic.setNotifyValue(true);
+        
+        final subscription = characteristic.onValueReceived.listen((data) {
+          if (data.isNotEmpty) {
+            // แปลงข้อมูลที่ได้รับเป็นข้อความ
+            String receivedData = String.fromCharCodes(data);
+            
+            if (kDebugMode) {
+              print('📨 [DeviceConnection] Data from ${characteristic.uuid}: "$receivedData"');
+            }
+
+            // เก็บข้อมูลใน _receivedData
+            _receivedData.add(Uint8List.fromList(data));
+
+            // เก็บแค่ 100 รายการล่าสุด
+            if (_receivedData.length > 100) {
+              _receivedData.removeAt(0);
+            }
+            notifyListeners();
+          }
+        });
+        
+        _dataSubscriptions.add(subscription);
+        
+        if (kDebugMode) {
+          print('✅ [DeviceConnection] Successfully subscribed to ${characteristic.uuid}');
+        }
+      }
+      
+      _statusMessage = 'เริ่มรับข้อมูลจาก ${_notifyCharacteristics.length} characteristics';
+      
+      if (kDebugMode) {
+        print('✅ [DeviceConnection] All notifications started successfully');
+      }
+      
       notifyListeners();
     } catch (e) {
       _statusMessage = 'เริ่มรับข้อมูลล้มเหลว: $e';
+      
+      if (kDebugMode) {
+        print('❌ [DeviceConnection] Failed to start notifications: $e');
+      }
+      
       notifyListeners();
     }
   }
 
+  // ⭐ ปรับปรุงให้ส่งไปทุก write characteristics
   Future<void> sendData(String data) async {
-    if (_writeCharacteristic == null) {
+    if (_writeCharacteristics.isEmpty) {
       _statusMessage = 'ไม่พบ characteristic สำหรับส่งข้อมูล';
+      
+      if (kDebugMode) {
+        print('⚠️ [DeviceConnection] No write characteristics found');
+      }
+      
       notifyListeners();
       return;
     }
@@ -147,39 +228,68 @@ class DeviceConnectionProvider extends ChangeNotifier {
       // แปลง string เป็น bytes
       List<int> bytes = data.codeUnits;
       
-      // ตรวจสอบว่าต้องใช้ write หรือ writeWithoutResponse
-      if (_writeCharacteristic!.properties.writeWithoutResponse) {
-        await _writeCharacteristic!.write(bytes, withoutResponse: true);
-      } else {
-        await _writeCharacteristic!.write(bytes);
+      // ส่งไปทุก write characteristics
+      for (var characteristic in _writeCharacteristics) {
+        if (kDebugMode) {
+          print('✍️ [DeviceConnection] Sending "$data" to ${characteristic.uuid}');
+        }
+        
+        // ตรวจสอบว่าต้องใช้ write หรือ writeWithoutResponse
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.write(bytes, withoutResponse: true);
+        } else {
+          await characteristic.write(bytes);
+        }
+        
+        if (kDebugMode) {
+          print('✅ [DeviceConnection] Data sent to ${characteristic.uuid}');
+        }
       }
 
       _statusMessage = 'ส่งข้อมูลสำเร็จ: $data';
       notifyListeners();
     } catch (e) {
       _statusMessage = 'ส่งข้อมูลล้มเหลว: $e';
+      
+      if (kDebugMode) {
+        print('❌ [DeviceConnection] Failed to send data: $e');
+      }
+      
       notifyListeners();
     }
   }
 
+  // ⭐ ปรับปรุงให้ส่งไปทุก write characteristics
   Future<void> sendBytes(List<int> bytes) async {
-    if (_writeCharacteristic == null) {
+    if (_writeCharacteristics.isEmpty) {
       _statusMessage = 'ไม่พบ characteristic สำหรับส่งข้อมูล';
       notifyListeners();
       return;
     }
 
     try {
-      if (_writeCharacteristic!.properties.writeWithoutResponse) {
-        await _writeCharacteristic!.write(bytes, withoutResponse: true);
-      } else {
-        await _writeCharacteristic!.write(bytes);
+      // ส่งไปทุก write characteristics
+      for (var characteristic in _writeCharacteristics) {
+        if (kDebugMode) {
+          print('✍️ [DeviceConnection] Sending ${bytes.length} bytes to ${characteristic.uuid}');
+        }
+        
+        if (characteristic.properties.writeWithoutResponse) {
+          await characteristic.write(bytes, withoutResponse: true);
+        } else {
+          await characteristic.write(bytes);
+        }
       }
 
       _statusMessage = 'ส่ง bytes สำเร็จ: ${bytes.length} bytes';
       notifyListeners();
     } catch (e) {
       _statusMessage = 'ส่ง bytes ล้มเหลว: $e';
+      
+      if (kDebugMode) {
+        print('❌ [DeviceConnection] Failed to send bytes: $e');
+      }
+      
       notifyListeners();
     }
   }
@@ -191,7 +301,12 @@ class DeviceConnectionProvider extends ChangeNotifier {
 
   Future<void> disconnect() async {
     try {
-      await _dataSubscription?.cancel();
+      // Cancel all subscriptions
+      for (var subscription in _dataSubscriptions) {
+        await subscription.cancel();
+      }
+      _dataSubscriptions.clear();
+      
       await _connectionStateSubscription?.cancel();
       
       if (_connectedDevice != null) {
@@ -201,7 +316,9 @@ class DeviceConnectionProvider extends ChangeNotifier {
       _clearConnection();
       notifyListeners();
     } catch (e) {
-      debugPrint('Disconnect error: $e');
+      if (kDebugMode) {
+        print('❌ [DeviceConnection] Disconnect error: $e');
+      }
     }
   }
 
@@ -209,8 +326,8 @@ class DeviceConnectionProvider extends ChangeNotifier {
     _connectedDevice = null;
     _services.clear();
     _receivedData.clear();
-    _writeCharacteristic = null;
-    _notifyCharacteristic = null;
+    _writeCharacteristics.clear();
+    _notifyCharacteristics.clear();
     _connectionState = BluetoothConnectionState.disconnected;
   }
 

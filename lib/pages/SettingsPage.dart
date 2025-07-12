@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:provider/provider.dart';
 import 'package:try_bluetooth/providers/SettingProvider.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -33,11 +33,12 @@ class SettingsPage extends StatelessWidget {
                 _buildConnectionStatus(settingProvider),
                 const SizedBox(height: 16),
                 if (settingProvider.connectedDevice != null) ...[
-                  _buildConnectionInfo(settingProvider),
+                  _buildConnectionInfo(context, settingProvider),
                   const SizedBox(height: 16),
                   // เพิ่มปุ่มเข้า Device Details โดยตรง
                   ElevatedButton.icon(
-                    onPressed: () => _showBLEDeviceDetails(context, settingProvider),
+                    onPressed:
+                        () => _showBLEDeviceDetails(context, settingProvider),
                     icon: const Icon(Icons.info),
                     label: const Text('Show Device Details'),
                     style: ElevatedButton.styleFrom(
@@ -59,35 +60,45 @@ class SettingsPage extends StatelessWidget {
   // เพิ่มฟังก์ชัน Debug
   void _showDebugInfo(BuildContext context) {
     final provider = Provider.of<SettingProvider>(context, listen: false);
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Debug Information'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Bluetooth On: ${provider.isBluetoothOn}'),
-              Text('Connected Device: ${provider.connectedDevice?.remoteId ?? 'None'}'),
-              Text('Services Count: ${provider.services.length}'),
-              Text('Total Characteristics: ${provider.characteristics.values.fold(0, (sum, list) => sum + list.length)}'),
-              const SizedBox(height: 16),
-              const Text('Characteristics with Write:'),
-              ...provider.characteristics.values.expand((list) => list).where((char) => 
-                char.properties.write || char.properties.writeWithoutResponse
-              ).map((char) => Text('- ${char.uuid}')),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Debug Information'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Bluetooth On: ${provider.isBluetoothOn}'),
+                  Text(
+                    'Connected Device: ${provider.connectedDevice?.remoteId ?? 'None'}',
+                  ),
+                  Text('Services Count: ${provider.services.length}'),
+                  Text(
+                    'Total Characteristics: ${provider.characteristics.values.fold(0, (sum, list) => sum + list.length)}',
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Characteristics with Write:'),
+                  ...provider.characteristics.values
+                      .expand((list) => list)
+                      .where(
+                        (char) =>
+                            char.properties.write ||
+                            char.properties.writeWithoutResponse,
+                      )
+                      .map((char) => Text('- ${char.uuid}')),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -173,7 +184,7 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildConnectionInfo(SettingProvider provider) {
+  Widget _buildConnectionInfo(BuildContext context, SettingProvider provider) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -201,13 +212,154 @@ class SettingsPage extends StatelessWidget {
             Text(
               'Device ID: ${provider.connectedDevice?.remoteId.toString() ?? 'Unknown'}',
             ),
-            // แสดงจำนวน Characteristics ที่มี Write properties
             Text(
               'Writable Characteristics: ${provider.characteristics.values.expand((list) => list).where((char) => char.properties.write || char.properties.writeWithoutResponse).length}',
               style: TextStyle(
                 color: Colors.blue[700],
                 fontWeight: FontWeight.bold,
               ),
+            ),
+
+            // ⭐ เพิ่ม Debug Section ใหม่
+            const SizedBox(height: 16),
+            const Divider(),
+            Text(
+              'Debug Information',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.orange[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // แสดงข้อมูล subscription status
+            Text(
+              'Active Subscriptions: ${provider.characteristics.values.expand((list) => list).where((char) => provider.isSubscribedTo(char)).length}',
+            ),
+            Text(
+              'Current Raw Value: ${provider.currentRawValue?.toStringAsFixed(2) ?? 'None'}',
+            ),
+            Text('Raw Text: "${provider.rawReceivedText ?? 'None'}"'),
+
+            const SizedBox(height: 12),
+
+            // ปุ่ม Debug Actions - แก้ไขให้ถูกต้อง
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await provider.debugConnectionStatus();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Debug info printed to console'),
+                        backgroundColor: Colors.blue,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.bug_report, size: 16),
+                  label: const Text('Debug Log'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[100],
+                    foregroundColor: Colors.blue[800],
+                    minimumSize: const Size(0, 32),
+                  ),
+                ),
+
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await provider.forceSubscribeAllNotifyCharacteristics();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Force subscribed to notify characteristics',
+                        ),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Force Notify'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[100],
+                    foregroundColor: Colors.orange[800],
+                    minimumSize: const Size(0, 32),
+                  ),
+                ),
+
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await provider.forceSubscribeAllCharacteristics();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Force subscribed to ALL characteristics',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.power, size: 16),
+                  label: const Text('Force ALL'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[100],
+                    foregroundColor: Colors.red[800],
+                    minimumSize: const Size(0, 32),
+                  ),
+                ),
+
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    // ลอง subscribe characteristic ที่น่าจะเป็นตัวส่งข้อมูลน้ำหนัก
+                    await provider.manualSubscribeToCharacteristic('abcdef01');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Manual subscribe to weight characteristic',
+                        ),
+                        backgroundColor: Colors.purple,
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.set_meal,
+                    size: 16,
+                  ), // ⭐ เพิ่ม icon ที่หายไป
+                  label: const Text('Target Weight'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple[100],
+                    foregroundColor: Colors.purple[800],
+                    minimumSize: const Size(0, 32),
+                  ),
+                ),
+
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    // ลอง read ทุก readable characteristics
+                    for (var serviceEntry in provider.characteristics.entries) {
+                      for (var char in serviceEntry.value) {
+                        if (char.properties.read) {
+                          await provider.readCharacteristic(char);
+                        }
+                      }
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Read all readable characteristics'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.download, size: 16),
+                  label: const Text('Read All'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[100],
+                    foregroundColor: Colors.green[800],
+                    minimumSize: const Size(0, 32),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -331,34 +483,38 @@ class SettingsPage extends StatelessWidget {
                 ),
               ],
             ),
-            trailing: isConnected
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.green),
-                      Text(
-                        'Connected',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  )
-                : provider.isConnecting
+            trailing:
+                isConnected
+                    ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.green),
+                        Text(
+                          'Connected',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    )
+                    : provider.isConnecting
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                     : IconButton(
-                        onPressed: () => provider.connectToBLEDevice(device),
-                        icon: const Icon(Icons.connect_without_contact),
-                        tooltip: 'Connect to BLE device',
-                      ),
-            onTap: isConnected
-                ? () => _showBLEDeviceDetails(context, provider)
-                : provider.isConnecting
+                      onPressed: () => provider.connectToBLEDevice(device),
+                      icon: const Icon(Icons.connect_without_contact),
+                      tooltip: 'Connect to BLE device',
+                    ),
+            onTap:
+                isConnected
+                    ? () => _showBLEDeviceDetails(context, provider)
+                    : provider.isConnecting
                     ? null
                     : () => provider.connectToBLEDevice(device),
           ),
@@ -384,209 +540,314 @@ class SettingsPage extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'BLE Device: ${provider.getBLEDeviceDisplayName(provider.connectedDevice!)}',
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Device ID: ${provider.connectedDevice!.remoteId}'),
-              Text('RSSI: ${provider.rssi ?? 'Unknown'} dBm'),
-              Text('MTU: ${provider.mtu ?? 'Unknown'} bytes'),
-              const SizedBox(height: 16),
-              Text('Services (${provider.services.length}):'),
-              const SizedBox(height: 8),
-              Expanded(
-                child: provider.services.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Loading services...'),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: provider.services.length,
-                        itemBuilder: (context, index) {
-                          final service = provider.services[index];
-                          final characteristics =
-                              provider.characteristics[service.uuid.toString()] ?? [];
-
-                          print('DEBUG: Service ${service.uuid} has ${characteristics.length} characteristics');
-
-                          return Card(
-                            child: ExpansionTile(
-                              title: Text(
-                                'Service: ${_formatUUID(service.uuid.toString())}',
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              'BLE Device: ${provider.getBLEDeviceDisplayName(provider.connectedDevice!)}',
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Device ID: ${provider.connectedDevice!.remoteId}'),
+                  Text('RSSI: ${provider.rssi ?? 'Unknown'} dBm'),
+                  Text('MTU: ${provider.mtu ?? 'Unknown'} bytes'),
+                  const SizedBox(height: 16),
+                  Text('Services (${provider.services.length}):'),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child:
+                        provider.services.isEmpty
+                            ? const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text('Loading services...'),
+                                ],
                               ),
-                              subtitle: Text(
-                                '${characteristics.length} characteristics',
-                              ),
-                              children: characteristics.map((char) {
-                                final value = provider.characteristicValues[char.uuid.toString()];
-                                final hasWrite = char.properties.write || char.properties.writeWithoutResponse;
-                                
-                                print('DEBUG: Characteristic ${char.uuid} - Write: $hasWrite');
+                            )
+                            : ListView.builder(
+                              itemCount: provider.services.length,
+                              itemBuilder: (context, index) {
+                                final service = provider.services[index];
+                                final characteristics =
+                                    provider.characteristics[service.uuid
+                                        .toString()] ??
+                                    [];
 
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(
-                                    'Characteristic: ${_formatUUID(char.uuid.toString())}',
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Properties: ${provider.getCharacteristicProperties(char)}',
-                                      ),
-                                      if (value != null)
-                                        Text(
-                                          'Value: ${provider.formatCharacteristicValue(value)}',
-                                        ),
-                                      // Debug info
-                                      Text(
-                                        'Debug: Write=${char.properties.write}, WriteNoResp=${char.properties.writeWithoutResponse}',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Read button
-                                      if (char.properties.read)
-                                        IconButton(
-                                          onPressed: () => provider.readCharacteristic(char),
-                                          icon: const Icon(Icons.download, size: 16),
-                                          tooltip: 'Read',
-                                        ),
-                                      
-                                      // Write button - เพิ่ม debug
-                                      if (hasWrite) ...[
-                                        IconButton(
-                                          onPressed: () => _showWriteDialog(context, provider, char),
-                                          icon: const Icon(Icons.edit, size: 16),
-                                          tooltip: 'Write',
-                                          style: IconButton.styleFrom(
-                                            backgroundColor: Colors.blue[100],
-                                          ),
-                                        ),
-                                        
-                                        // Send 'o' button
-                                        IconButton(
-                                          onPressed: () => _sendOCommand(context, provider, char),
-                                          icon: const Icon(Icons.radio_button_unchecked, size: 16),
-                                          tooltip: 'Send O',
-                                          style: IconButton.styleFrom(
-                                            backgroundColor: Colors.orange.shade100,
-                                            foregroundColor: Colors.orange.shade700,
-                                          ),
-                                        ),
-                                        
-                                        // Quick commands
-                                        PopupMenuButton<String>(
-                                          onSelected: (command) => _sendQuickCommand(context, provider, char, command),
-                                          icon: const Icon(Icons.flash_on, size: 16),
-                                          tooltip: 'Quick Commands',
-                                          itemBuilder: (context) => [
-                                            const PopupMenuItem(
-                                              value: 'start',
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.play_arrow, size: 16, color: Colors.green),
-                                                  SizedBox(width: 8),
-                                                  Text('Start'),
+                                print(
+                                  'DEBUG: Service ${service.uuid} has ${characteristics.length} characteristics',
+                                );
+
+                                return Card(
+                                  child: ExpansionTile(
+                                    title: Text(
+                                      'Service: ${_formatUUID(service.uuid.toString())}',
+                                    ),
+                                    subtitle: Text(
+                                      '${characteristics.length} characteristics',
+                                    ),
+                                    children:
+                                        characteristics.map((char) {
+                                          final value =
+                                              provider.characteristicValues[char
+                                                  .uuid
+                                                  .toString()];
+                                          final hasWrite =
+                                              char.properties.write ||
+                                              char
+                                                  .properties
+                                                  .writeWithoutResponse;
+
+                                          print(
+                                            'DEBUG: Characteristic ${char.uuid} - Write: $hasWrite',
+                                          );
+
+                                          return ListTile(
+                                            dense: true,
+                                            title: Text(
+                                              'Characteristic: ${_formatUUID(char.uuid.toString())}',
+                                            ),
+                                            subtitle: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Properties: ${provider.getCharacteristicProperties(char)}',
+                                                ),
+                                                if (value != null)
+                                                  Text(
+                                                    'Value: ${provider.formatCharacteristicValue(value)}',
+                                                  ),
+                                                Text(
+                                                  'Debug: Write=${char.properties.write}, WriteNoResp=${char.properties.writeWithoutResponse}',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            trailing: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                // Read button
+                                                if (char.properties.read)
+                                                  IconButton(
+                                                    onPressed:
+                                                        () => provider
+                                                            .readCharacteristic(
+                                                              char,
+                                                            ),
+                                                    icon: const Icon(
+                                                      Icons.download,
+                                                      size: 16,
+                                                    ),
+                                                    tooltip: 'Read',
+                                                  ),
+
+                                                // Write button
+                                                if (hasWrite) ...[
+                                                  IconButton(
+                                                    onPressed:
+                                                        () => _showWriteDialog(
+                                                          context,
+                                                          provider,
+                                                          char,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons.edit,
+                                                      size: 16,
+                                                    ),
+                                                    tooltip: 'Write',
+                                                    style: IconButton.styleFrom(
+                                                      backgroundColor:
+                                                          Colors.blue[100],
+                                                    ),
+                                                  ),
+
+                                                  // Send 'o' button
+                                                  IconButton(
+                                                    onPressed:
+                                                        () => _sendOCommand(
+                                                          context,
+                                                          provider,
+                                                          char,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .radio_button_unchecked,
+                                                      size: 16,
+                                                    ),
+                                                    tooltip: 'Send O',
+                                                    style: IconButton.styleFrom(
+                                                      backgroundColor:
+                                                          Colors
+                                                              .orange
+                                                              .shade100,
+                                                      foregroundColor:
+                                                          Colors
+                                                              .orange
+                                                              .shade700,
+                                                    ),
+                                                  ),
+
+                                                  // Quick commands
+                                                  PopupMenuButton<String>(
+                                                    onSelected:
+                                                        (command) =>
+                                                            _sendQuickCommand(
+                                                              context,
+                                                              provider,
+                                                              char,
+                                                              command,
+                                                            ),
+                                                    icon: const Icon(
+                                                      Icons.flash_on,
+                                                      size: 16,
+                                                    ),
+                                                    tooltip: 'Quick Commands',
+                                                    itemBuilder:
+                                                        (context) => [
+                                                          const PopupMenuItem(
+                                                            value: 'start',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons
+                                                                      .play_arrow,
+                                                                  size: 16,
+                                                                  color:
+                                                                      Colors
+                                                                          .green,
+                                                                ),
+                                                                SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                Text('Start'),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'stop',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons.stop,
+                                                                  size: 16,
+                                                                  color:
+                                                                      Colors
+                                                                          .red,
+                                                                ),
+                                                                SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                Text('Stop'),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'zero',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons
+                                                                      .exposure_zero,
+                                                                  size: 16,
+                                                                  color:
+                                                                      Colors
+                                                                          .blue,
+                                                                ),
+                                                                SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                Text('Zero'),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'tare',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons
+                                                                      .restart_alt,
+                                                                  size: 16,
+                                                                  color:
+                                                                      Colors
+                                                                          .orange,
+                                                                ),
+                                                                SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                Text('Tare'),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'status',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons.info,
+                                                                  size: 16,
+                                                                  color:
+                                                                      Colors
+                                                                          .purple,
+                                                                ),
+                                                                SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                Text('Status'),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                  ),
+                                                ] else ...[
+                                                  // แสดงข้อความว่าทำไมไม่มีปุ่ม Write
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.red[100],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            4,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      'No Write',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors.red[700],
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ],
-                                              ),
+                                              ],
                                             ),
-                                            const PopupMenuItem(
-                                              value: 'stop',
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.stop, size: 16, color: Colors.red),
-                                                  SizedBox(width: 8),
-                                                  Text('Stop'),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'zero',
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.exposure_zero, size: 16, color: Colors.blue),
-                                                  SizedBox(width: 8),
-                                                  Text('Zero'),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'tare',
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.restart_alt, size: 16, color: Colors.orange),
-                                                  SizedBox(width: 8),
-                                                  Text('Tare'),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'status',
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.info, size: 16, color: Colors.purple),
-                                                  SizedBox(width: 8),
-                                                  Text('Status'),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ] else ...[
-                                        // แสดงข้อความว่าทำไมไม่มีปุ่ม Write
-                                        Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red[100],
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'No Write',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.red[700],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
+                                          );
+                                        }).toList(),
                                   ),
                                 );
-                              }).toList(),
+                              },
                             ),
-                          );
-                        },
-                      ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -678,75 +939,79 @@ class SettingsPage extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Write to Characteristic'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Value (text)',
-                hintText: 'e.g., Hello, start, stop, o',
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Quick buttons
-            Wrap(
-              spacing: 8,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Write to Characteristic'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ElevatedButton(
-                  onPressed: () => controller.text = 'o',
-                  child: const Text('o'),
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Value (text)',
+                    hintText: 'e.g., Hello, start, stop, o',
+                  ),
                 ),
-                ElevatedButton(
-                  onPressed: () => controller.text = 'start',
-                  child: const Text('start'),
-                ),
-                ElevatedButton(
-                  onPressed: () => controller.text = 'stop',
-                  child: const Text('stop'),
-                ),
-                ElevatedButton(
-                  onPressed: () => controller.text = 'status',
-                  child: const Text('status'),
+                const SizedBox(height: 16),
+                // Quick buttons
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => controller.text = 'o',
+                      child: const Text('o'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => controller.text = 'start',
+                      child: const Text('start'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => controller.text = 'stop',
+                      child: const Text('stop'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => controller.text = 'status',
+                      child: const Text('status'),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  final input = controller.text.trim();
+                  if (input.isNotEmpty) {
+                    try {
+                      provider.writeCharacteristic(
+                        characteristic,
+                        input.codeUnits,
+                      );
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('ส่งคำสั่ง "$input" แล้ว'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('ส่งคำสั่งล้มเหลว: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Write'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              final input = controller.text.trim();
-              if (input.isNotEmpty) {
-                try {
-                  provider.writeCharacteristic(characteristic, input.codeUnits);
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('ส่งคำสั่ง "$input" แล้ว'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('ส่งคำสั่งล้มเหลว: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Write'),
-          ),
-        ],
-      ),
     );
   }
 

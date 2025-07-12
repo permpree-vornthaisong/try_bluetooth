@@ -766,6 +766,35 @@ class FormulaProvider extends ChangeNotifier {
     return '{${parts.join(", ")}}';
   }
 
+  /// 🔨 เพิ่ม column ใหม่ใน table
+  Future<bool> addColumnToTable(
+    String tableName,
+    String columnName,
+    String columnType,
+  ) async {
+    if (_crudProvider == null) return false;
+
+    try {
+      // ใช้ database จาก _crudProvider
+      final db = _crudProvider!.database;
+      if (db == null) return false;
+
+      // เพิ่ม column ใหม่
+      final sql = 'ALTER TABLE $tableName ADD COLUMN $columnName $columnType';
+      await db.execute(sql);
+
+      debugPrint(
+        '✅ [FormulaProvider] Added column: $columnName ($columnType) to $tableName',
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '❌ [FormulaProvider] Failed to add column $columnName to $tableName: $e',
+      );
+      return false;
+    }
+  }
+
   /// พิมพ์ข้อมูลเฉพาะ table ที่ระบุ
   Future<void> printSpecificTable(String tableName) async {
     if (_crudProvider == null || !_isInitialized) {

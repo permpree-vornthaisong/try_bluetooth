@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -11,12 +11,12 @@ class SettingProvider extends ChangeNotifier {
   BluetoothDevice? _connectedDevice;
   bool _isConnecting = false;
   String _connectionStatus = 'Disconnected';
-  
+
   // BLE Services and Characteristics
   List<BluetoothService> _services = [];
   Map<String, List<BluetoothCharacteristic>> _characteristics = {};
   Map<String, dynamic> _characteristicValues = {};
-  
+
   // RSSI and connection info
   int? _rssi;
   int? _mtu;
@@ -35,7 +35,8 @@ class SettingProvider extends ChangeNotifier {
   double? _currentRawValue;
   String? _primaryCharacteristicUuid; // UUID of main weight characteristic
   String _lastRawText = ''; // Store last received text for debugging
-  String _rawReceivedText = ''; // ⚡ เพิ่มตัวแปรนี้สำหรับเก็บข้อมูล raw text ล่าสุด
+  String _rawReceivedText =
+      ''; // ⚡ เพิ่มตัวแปรนี้สำหรับเก็บข้อมูล raw text ล่าสุด
 
   // Getters
   BluetoothAdapterState get adapterState => _adapterState;
@@ -46,16 +47,21 @@ class SettingProvider extends ChangeNotifier {
   String get connectionStatus => _connectionStatus;
   bool get isBluetoothOn => _adapterState == BluetoothAdapterState.on;
   List<BluetoothService> get services => _services;
-  Map<String, List<BluetoothCharacteristic>> get characteristics => _characteristics;
+  Map<String, List<BluetoothCharacteristic>> get characteristics =>
+      _characteristics;
   Map<String, dynamic> get characteristicValues => _characteristicValues;
-  
+
   // ✅ เพิ่ม getters ใหม่
-  double? get currentRawValue => _currentRawValue; // Clean raw value for calibration
+  double? get currentRawValue =>
+      _currentRawValue; // Clean raw value for calibration
   String get lastRawText => _lastRawText; // For debugging
-  String? get rawReceivedText => _rawReceivedText.isNotEmpty ? _rawReceivedText : null; // ⚡ เพิ่ม getter นี้
+  String? get rawReceivedText =>
+      _rawReceivedText.isNotEmpty
+          ? _rawReceivedText
+          : null; // ⚡ เพิ่ม getter นี้
 
   bool get autoSubscribeEnabled => _autoSubscribeEnabled;
-  
+
   void toggleAutoSubscribe() {
     _autoSubscribeEnabled = !_autoSubscribeEnabled;
     notifyListeners();
@@ -74,11 +80,11 @@ class SettingProvider extends ChangeNotifier {
       String text = String.fromCharCodes(data).trim();
       _lastRawText = text; // Store for debugging
       _rawReceivedText = text; // ⚡ เก็บข้อมูล raw text ล่าสุด
-      
+
       if (kDebugMode) {
         print('Raw received text: "$text"');
       }
-      
+
       // ⚡ ตรวจสอบรูปแบบข้อมูลแบบใหม่ เช่น "U002.00T000.00DN" หรือ "S002.00T000.00DN"
       if (text.length >= 14 && text.endsWith('DN')) {
         // รูปแบบ: U/S + 002.00 + T + 000.00 + DN
@@ -86,8 +92,10 @@ class SettingProvider extends ChangeNotifier {
         try {
           String weightPart = text.substring(1, 7); // "002.00"
           double? weightValue = double.tryParse(weightPart);
-          
-          if (weightValue != null && weightValue.isFinite && !weightValue.isNaN) {
+
+          if (weightValue != null &&
+              weightValue.isFinite &&
+              !weightValue.isNaN) {
             if (kDebugMode) {
               print('Extracted raw value: $weightValue');
             }
@@ -99,35 +107,35 @@ class SettingProvider extends ChangeNotifier {
           }
         }
       }
-      
+
       // ถ้าไม่ใช่รูปแบบใหม่ ใช้วิธีเดิม
       // Remove all non-numeric characters except decimal point and minus sign
       String cleanText = _cleanNumericString(text);
-      
+
       if (kDebugMode) {
         print('Cleaned text: "$cleanText"');
       }
-      
+
       if (cleanText.isEmpty) {
         return null;
       }
-      
+
       // Handle multiple decimal points - keep only the first one
       List<String> parts = cleanText.split('.');
       if (parts.length > 2) {
         cleanText = '${parts[0]}.${parts.sublist(1).join('')}';
       }
-      
+
       // Try to parse as double
       double? value = double.tryParse(cleanText);
-      
+
       if (value != null && value.isFinite && !value.isNaN) {
         if (kDebugMode) {
           print('Extracted raw value: $value');
         }
         return value;
       }
-      
+
       return null;
     } catch (e) {
       if (kDebugMode) {
@@ -142,19 +150,19 @@ class SettingProvider extends ChangeNotifier {
     try {
       // ตัวอย่าง: "U002.00T000.00DN" หรือ "S002.00T000.00DN"
       if (rawData.length < 13) return {};
-      
+
       // ดึงสถานะ (U = Unstable, S = Stable)
       String status = rawData.substring(0, 1);
       bool isStable = status == 'S';
-      
+
       // ดึงน้ำหนัก (ตำแหน่ง 1-6: "002.00")
       String weightStr = rawData.substring(1, 7);
       double weight = double.tryParse(weightStr) ?? 0.0;
-      
+
       // ดึงค่า Tare (ตำแหน่ง 8-13: "000.00")
       String tareStr = rawData.substring(8, 14);
       double tare = double.tryParse(tareStr) ?? 0.0;
-      
+
       return {
         'status': status,
         'isStable': isStable,
@@ -183,22 +191,25 @@ class SettingProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> unsubscribeFromCharacteristic(BluetoothCharacteristic characteristic) async {
+  Future<void> unsubscribeFromCharacteristic(
+    BluetoothCharacteristic characteristic,
+  ) async {
     try {
       await characteristic.setNotifyValue(false);
-      
+
       // Remove specific subscription
       _characteristicSubscriptions.removeWhere((sub) {
         // This is a simplified check - in practice you'd need better tracking
         return sub.toString().contains(characteristic.uuid.toString());
       });
-      
-      _characteristicSubscriptions_status[characteristic.uuid.toString()] = false;
-      
+
+      _characteristicSubscriptions_status[characteristic.uuid.toString()] =
+          false;
+
       if (kDebugMode) {
         print('Unsubscribed from ${characteristic.uuid}');
       }
-      
+
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -208,8 +219,11 @@ class SettingProvider extends ChangeNotifier {
   }
 
   bool isSubscribedTo(BluetoothCharacteristic characteristic) {
-    return _characteristicSubscriptions_status[characteristic.uuid.toString()] ?? false;
+    return _characteristicSubscriptions_status[characteristic.uuid
+            .toString()] ??
+        false;
   }
+
   int? get rssi => _rssi;
   int? get mtu => _mtu;
 
@@ -222,7 +236,7 @@ class SettingProvider extends ChangeNotifier {
     _adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) {
       _adapterState = state;
       notifyListeners();
-      
+
       if (state == BluetoothAdapterState.on) {
         _startBLEScan();
       } else {
@@ -242,7 +256,7 @@ class SettingProvider extends ChangeNotifier {
       _bleDevices.clear();
       for (ScanResult r in results) {
         // Filter for BLE devices (devices with advertisement data)
-        if (r.advertisementData.localName.isNotEmpty || 
+        if (r.advertisementData.localName.isNotEmpty ||
             r.advertisementData.serviceUuids.isNotEmpty ||
             r.device.platformName.isNotEmpty) {
           _bleDevices.add(r.device);
@@ -266,11 +280,11 @@ class SettingProvider extends ChangeNotifier {
 
   Future<void> _startBLEScan() async {
     if (_isScanning) return;
-    
+
     try {
       _isScanning = true;
       notifyListeners();
-      
+
       // Scan specifically for BLE devices with timeout
       await FlutterBluePlus.startScan(
         timeout: const Duration(seconds: 15),
@@ -303,7 +317,7 @@ class SettingProvider extends ChangeNotifier {
       await turnOnBluetooth();
       return;
     }
-    
+
     await _stopBLEScan();
     await _startBLEScan();
   }
@@ -339,19 +353,20 @@ class SettingProvider extends ChangeNotifier {
         timeout: const Duration(seconds: 20),
         autoConnect: false,
       );
-      
+
       // Listen to connection state
       _connectionStateSubscription?.cancel();
-      _connectionStateSubscription = device.connectionState.listen((state) async {
+      _connectionStateSubscription = device.connectionState.listen((
+        state,
+      ) async {
         if (state == BluetoothConnectionState.connected) {
           _connectedDevice = device;
           _connectionStatus = 'Connected to ${device.platformName}';
-          
+
           // Discover BLE services and characteristics
           await _discoverBLEServices();
           await _readRSSI();
           await _requestMTU();
-          
         } else if (state == BluetoothConnectionState.disconnected) {
           _connectedDevice = null;
           _connectionStatus = 'Disconnected';
@@ -359,7 +374,6 @@ class SettingProvider extends ChangeNotifier {
         }
         notifyListeners();
       });
-
     } catch (e) {
       _connectionStatus = 'Failed to connect to BLE device';
       if (kDebugMode) {
@@ -371,101 +385,193 @@ class SettingProvider extends ChangeNotifier {
     }
   }
 
+  // แทนที่ _discoverBLEServices method ใน SettingProvider.dart ให้เป็น auto-detect
+
   Future<void> _discoverBLEServices() async {
     if (_connectedDevice == null) return;
 
     try {
+      if (kDebugMode) {
+        print('🔍 [SettingProvider] Discovering BLE services...');
+      }
+
       // Clear existing subscriptions first
       for (var subscription in _characteristicSubscriptions) {
         subscription.cancel();
       }
       _characteristicSubscriptions.clear();
+      _characteristicSubscriptions_status.clear();
 
       _services = await _connectedDevice!.discoverServices();
       _characteristics.clear();
 
+      if (kDebugMode) {
+        print('📋 [SettingProvider] Found ${_services.length} services');
+      }
+
+      // ⭐ Auto-detect และ subscribe ทุก notify characteristics
       for (BluetoothService service in _services) {
         _characteristics[service.uuid.toString()] = service.characteristics;
-        
-        // Auto-subscribe to notify/indicate characteristics
-        for (BluetoothCharacteristic characteristic in service.characteristics) {
-          if (characteristic.properties.notify || characteristic.properties.indicate) {
+
+        if (kDebugMode) {
+          print(
+            '📁 [SettingProvider] Service: ${service.uuid} with ${service.characteristics.length} characteristics',
+          );
+        }
+
+        for (BluetoothCharacteristic characteristic
+            in service.characteristics) {
+          if (kDebugMode) {
+            print(
+              '  📋 [SettingProvider] Characteristic: ${characteristic.uuid}',
+            );
+            print('     - Read: ${characteristic.properties.read}');
+            print('     - Write: ${characteristic.properties.write}');
+            print(
+              '     - WriteWithoutResponse: ${characteristic.properties.writeWithoutResponse}',
+            );
+            print('     - Notify: ${characteristic.properties.notify}');
+            print('     - Indicate: ${characteristic.properties.indicate}');
+          }
+
+          // ⭐ Subscribe ทุก characteristic ที่มี notify หรือ indicate
+          if (characteristic.properties.notify ||
+              characteristic.properties.indicate) {
+            if (kDebugMode) {
+              print(
+                '🔔 [SettingProvider] Auto-subscribing to: ${characteristic.uuid}',
+              );
+            }
             await _subscribeToCharacteristic(characteristic);
+
+            // Add delay between subscriptions เพื่อป้องกัน conflicts
+            await Future.delayed(const Duration(milliseconds: 200));
           }
         }
       }
-      
+
+      if (kDebugMode) {
+        print('✅ [SettingProvider] Service discovery completed');
+        print(
+          '📊 [SettingProvider] Total characteristics: ${_characteristics.values.expand((list) => list).length}',
+        );
+        print(
+          '📊 [SettingProvider] Subscribed: ${_characteristicSubscriptions_status.values.where((subscribed) => subscribed).length}',
+        );
+      }
+
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
-        print('Error discovering BLE services: $e');
+        print('❌ [SettingProvider] Error discovering BLE services: $e');
       }
     }
   }
 
-  Future<void> _subscribeToCharacteristic(BluetoothCharacteristic characteristic) async {
+  // ⭐ ปรับปรุง _subscribeToCharacteristic ให้ robust ขึ้น
+  Future<void> _subscribeToCharacteristic(
+    BluetoothCharacteristic characteristic,
+  ) async {
     try {
+      if (kDebugMode) {
+        print(
+          '🔔 [SettingProvider] Attempting to subscribe to: ${characteristic.uuid}',
+        );
+      }
+
       // Check if already subscribed
-      bool isAlreadySubscribed = _characteristicSubscriptions.any(
-        (sub) => sub.toString().contains(characteristic.uuid.toString())
-      );
-      
+      bool isAlreadySubscribed =
+          _characteristicSubscriptions_status[characteristic.uuid.toString()] ??
+          false;
+
       if (isAlreadySubscribed) {
         if (kDebugMode) {
-          print('Already subscribed to ${characteristic.uuid}');
+          print(
+            '⚠️ [SettingProvider] Already subscribed to ${characteristic.uuid}',
+          );
         }
         return;
       }
 
       await characteristic.setNotifyValue(true);
-      
+
       final subscription = characteristic.onValueReceived.listen((value) {
+        if (kDebugMode) {
+          String text = String.fromCharCodes(value).trim();
+          print(
+            '📨 [SettingProvider] Data from ${characteristic.uuid}: "$text" (${value.length} bytes)',
+          );
+        }
+
         _characteristicValues[characteristic.uuid.toString()] = value;
-        
-        // ✅ แก้ไขส่วนนี้ - แยกค่า raw value สำหรับ calibration และเก็บ raw text
+
+        // ⭐ แยกค่า raw value และเก็บ raw text
         double? rawValue = _extractRawValue(value);
         if (rawValue != null) {
           _currentRawValue = rawValue;
-          
-          // If this is the primary weight characteristic, update it
-          if (_primaryCharacteristicUuid == null || 
-              _primaryCharacteristicUuid == characteristic.uuid.toString()) {
+
+          // ⭐ Auto-set เป็น primary characteristic ถ้าได้รับข้อมูลน้ำหนัก
+          if (_primaryCharacteristicUuid == null ||
+              _primaryCharacteristicUuid != characteristic.uuid.toString()) {
             _primaryCharacteristicUuid = characteristic.uuid.toString();
+            if (kDebugMode) {
+              print(
+                '🎯 [SettingProvider] Set ${characteristic.uuid} as primary weight characteristic',
+              );
+            }
+          }
+
+          if (kDebugMode) {
+            print('⚖️ [SettingProvider] Updated raw value: $rawValue');
           }
         }
-        
-        // Optional: Limit console output for frequent updates
-        if (kDebugMode) {
-          print('BLE Data from ${characteristic.uuid}: ${value.length} bytes, Raw: $rawValue');
-        }
-        
+
         notifyListeners();
       });
-      
+
       _characteristicSubscriptions.add(subscription);
-      _characteristicSubscriptions_status[characteristic.uuid.toString()] = true;
-      
+      _characteristicSubscriptions_status[characteristic.uuid.toString()] =
+          true;
+
       if (kDebugMode) {
-        print('Subscribed to ${characteristic.uuid}');
+        print(
+          '✅ [SettingProvider] Successfully subscribed to ${characteristic.uuid}',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error subscribing to characteristic ${characteristic.uuid}: $e');
+        print(
+          '❌ [SettingProvider] Error subscribing to ${characteristic.uuid}: $e',
+        );
       }
     }
   }
 
-  Future<void> readCharacteristic(BluetoothCharacteristic characteristic) async {
+  // ⭐ เพิ่ม method สำหรับหา write characteristic อัตโนมัติ
+  BluetoothCharacteristic? getWriteCharacteristic() {
+    for (var serviceEntry in _characteristics.entries) {
+      for (var char in serviceEntry.value) {
+        if (char.properties.write || char.properties.writeWithoutResponse) {
+          return char;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> readCharacteristic(
+    BluetoothCharacteristic characteristic,
+  ) async {
     try {
       final value = await characteristic.read();
       _characteristicValues[characteristic.uuid.toString()] = value;
-      
+
       // ✅ เพิ่มส่วนนี้ - แยกค่า raw value เมื่ออ่านข้อมูล
       double? rawValue = _extractRawValue(value);
       if (rawValue != null) {
         _currentRawValue = rawValue;
       }
-      
+
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -474,19 +580,56 @@ class SettingProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> writeCharacteristic(BluetoothCharacteristic characteristic, List<int> value) async {
+  // ⭐ ปรับปรุง writeCharacteristic ให้หา characteristic อัตโนมัติ
+  Future<void> writeCharacteristic(
+    BluetoothCharacteristic? characteristic,
+    List<int> value,
+  ) async {
     try {
-      await characteristic.write(value);
+      BluetoothCharacteristic? targetChar =
+          characteristic ?? getWriteCharacteristic();
+
+      if (targetChar == null) {
+        if (kDebugMode) {
+          print('❌ [SettingProvider] No writable characteristic found');
+        }
+        return;
+      }
+
+      if (kDebugMode) {
+        String message = String.fromCharCodes(value);
+        print('✍️ [SettingProvider] Writing "$message" to ${targetChar.uuid}');
+      }
+
+      await targetChar.write(value);
+
+      if (kDebugMode) {
+        print('✅ [SettingProvider] Write successful');
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error writing characteristic: $e');
+        print('❌ [SettingProvider] Error writing characteristic: $e');
+      }
+    }
+  }
+
+  // ⭐ เพิ่ม method สำหรับส่งคำสั่งโดยอัตโนมัติ
+  Future<void> sendCommand(String command) async {
+    final writeChar = getWriteCharacteristic();
+    if (writeChar != null) {
+      await writeCharacteristic(writeChar, command.codeUnits);
+    } else {
+      if (kDebugMode) {
+        print(
+          '❌ [SettingProvider] Cannot send command "$command" - no write characteristic',
+        );
       }
     }
   }
 
   Future<void> _readRSSI() async {
     if (_connectedDevice == null) return;
-    
+
     try {
       _rssi = await _connectedDevice!.readRssi();
       notifyListeners();
@@ -499,7 +642,7 @@ class SettingProvider extends ChangeNotifier {
 
   Future<void> _requestMTU() async {
     if (_connectedDevice == null) return;
-    
+
     try {
       _mtu = await _connectedDevice!.requestMtu(512);
       notifyListeners();
@@ -532,13 +675,13 @@ class SettingProvider extends ChangeNotifier {
     _characteristicValues.clear();
     _rssi = null;
     _mtu = null;
-    
+
     // ✅ เพิ่มส่วนนี้ - เคลียร์ raw value data และ raw text
     _currentRawValue = null;
     _primaryCharacteristicUuid = null;
     _lastRawText = '';
     _rawReceivedText = ''; // ⚡ เคลียร์ raw text ด้วย
-    
+
     // Cancel all characteristic subscriptions
     for (var subscription in _characteristicSubscriptions) {
       subscription.cancel();
@@ -557,11 +700,11 @@ class SettingProvider extends ChangeNotifier {
 
   String formatCharacteristicValue(List<int> value) {
     if (value.isEmpty) return 'No data';
-    
+
     // Try to decode as UTF-8 string first
     try {
       String text = String.fromCharCodes(value).trim();
-      
+
       // Check if it's a weight reading format
       if (text.toLowerCase().contains('weight')) {
         // Parse and format weight reading
@@ -570,7 +713,7 @@ class SettingProvider extends ChangeNotifier {
           return 'Weight: ${weight.toStringAsFixed(2)} kg';
         }
       }
-      
+
       return text;
     } catch (e) {
       // If not valid UTF-8, show as hex
@@ -582,21 +725,24 @@ class SettingProvider extends ChangeNotifier {
   double? _parseWeightFromText(String text) {
     try {
       // Look for pattern like "Weight: 7393.00 kg" or similar
-      RegExp weightPattern = RegExp(r'Weight:\s*([+-]?\d+\.?\d*)', caseSensitive: false);
+      RegExp weightPattern = RegExp(
+        r'Weight:\s*([+-]?\d+\.?\d*)',
+        caseSensitive: false,
+      );
       Match? match = weightPattern.firstMatch(text);
-      
+
       if (match != null) {
         return double.tryParse(match.group(1)!);
       }
-      
+
       // If no "Weight:" pattern, try to extract any number from the text
       RegExp numberPattern = RegExp(r'([+-]?\d+\.?\d*)');
       match = numberPattern.firstMatch(text);
-      
+
       if (match != null) {
         return double.tryParse(match.group(1)!);
       }
-      
+
       return null;
     } catch (e) {
       return null;
@@ -607,7 +753,8 @@ class SettingProvider extends ChangeNotifier {
     List<String> props = [];
     if (characteristic.properties.read) props.add('Read');
     if (characteristic.properties.write) props.add('Write');
-    if (characteristic.properties.writeWithoutResponse) props.add('Write w/o Response');
+    if (characteristic.properties.writeWithoutResponse)
+      props.add('Write w/o Response');
     if (characteristic.properties.notify) props.add('Notify');
     if (characteristic.properties.indicate) props.add('Indicate');
     return props.join(', ');
@@ -618,11 +765,11 @@ class SettingProvider extends ChangeNotifier {
     _adapterStateSubscription?.cancel();
     _scanResultsSubscription?.cancel();
     _connectionStateSubscription?.cancel();
-    
+
     for (var subscription in _characteristicSubscriptions) {
       subscription.cancel();
     }
-    
+
     _stopBLEScan();
     disconnectBLEDevice();
     super.dispose();

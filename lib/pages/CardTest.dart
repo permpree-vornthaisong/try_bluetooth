@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:try_bluetooth/pages/showCreateCustomerDialog.dart';
+import 'package:try_bluetooth/providers/CardTestProvider.dart'; // เพิ่มบรรทัดนี้
 import 'package:try_bluetooth/providers/FormulaProvider.dart';
 
 class Cardtest extends StatelessWidget {
@@ -8,59 +9,62 @@ class Cardtest extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Formula'), backgroundColor: Colors.blue),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.functions, size: 100, color: Colors.blue),
-            SizedBox(height: 20),
-            Text(
-              'Formula Page',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'This is the formula testing page',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            Expanded(child: buildTapCardList()),
-            ElevatedButton.icon(
-              onPressed: () => _showIconDialog(context),
-              icon: const Icon(Icons.category),
-              label: const Text('Show Icon Categories'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+    return ChangeNotifierProvider(
+      create: (context) => CardTestProvider()..initialize(context),
+      child: Scaffold(
+        appBar: AppBar(title: Text('Formula'), backgroundColor: Colors.blue),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.functions, size: 100, color: Colors.blue),
+              SizedBox(height: 20),
+              Text(
+                'Formula Page',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'This is the formula testing page',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              Expanded(child: buildTapCardList()),
+              ElevatedButton.icon(
+                onPressed: () => _showIconDialog(context),
+                icon: const Icon(Icons.category),
+                label: const Text('Show Icon Categories'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                 ),
               ),
-            ),
-            ElevatedButton.icon(
-              onPressed: () => showCreateCustomerDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Create New Formula'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+              ElevatedButton.icon(
+                onPressed: () => showCreateCustomerDialog(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Create New Formula'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-Widget buildTapCardList() {
-    return Consumer<FormulaProvider>(
-      builder: (context, formulaProvider, child) {
+  Widget buildTapCardList() {
+    return Consumer2<FormulaProvider, CardTestProvider>(
+      builder: (context, formulaProvider, cardTestProvider, child) {
         // ตรวจสอบสถานะ initialization
         if (!formulaProvider.isInitialized) {
           return Center(
@@ -171,8 +175,8 @@ Widget buildTapCardList() {
                 onTap: () async {
                   debugPrint('Formula "$formulaName" tapped.');
                   
-                  // 🎯 เพิ่มการปริ้นข้อมูลทุกอย่างใน Formula
-                  await _printFormulaData(formulaProvider, formula);
+                  // เรียกใช้ฟังก์ชันจาก CardTestProvider
+                  await cardTestProvider.onCardTapped(formula);
                   
                   // แสดง dialog รายละเอียด
                   _showFormulaDetails(context, formula);
@@ -357,117 +361,6 @@ Widget buildTapCardList() {
     );
   }
 
-  // 🎯 ฟังก์ชันปริ้นข้อมูลทุกอย่างใน Formula
-  Future<void> _printFormulaData(FormulaProvider provider, Map<String, dynamic> formula) async {
-    try {
-      final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
-      final tableName = 'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
-      
-      debugPrint('🎯 Card tapped: $formulaName');
-      debugPrint('=== PRINTING ${formulaName.toUpperCase()} DATA ===');
-
-      // ดึงข้อมูลจาก table
-      final tableData = await provider.getTableData(tableName);
-      final columns = await provider.getTableColumns(tableName);
-
-      debugPrint('📊 Found ${tableData.length} records with ${columns.length} columns');
-      debugPrint('');
-
-      // ปริ้นข้อมูลทั้งหมด
-      if (tableData.isEmpty) {
-        debugPrint('📝 No data found');
-      } else {
-        // ปริ้นแบบรายการก่อน
-        for (int i = 0; i < tableData.length; i++) {
-          final record = tableData[i];
-          debugPrint('Record ${i + 1}:');
-
-          for (final column in columns) {
-            debugPrint('  $column: ${record[column]}');
-          }
-          debugPrint('');
-        }
-
-        // แล้วปริ้นแบบตาราง
-        debugPrint('=== TABLE FORMAT ===');
-        _printTable(tableData, columns);
-      }
-
-      debugPrint('✅ Finished printing $formulaName data');
-      debugPrint('');
-    } catch (e) {
-      debugPrint('❌ Error printing formula data: $e');
-    }
-  }
-
-  // ฟังก์ชันปริ้นตารางสวยๆ
-  void _printTable(List<Map<String, dynamic>> tableData, List<String> columns) {
-    if (tableData.isEmpty) return;
-
-    // กำหนดความกว้างสูงสุดของแต่ละ column
-    const int maxWidth = 20;
-    Map<String, int> columnWidths = {};
-
-    // คำนวณความกว้างที่เหมาะสม
-    for (String column in columns) {
-      int maxLength = column.length;
-
-      for (var record in tableData) {
-        String value = record[column]?.toString() ?? '';
-        if (value.length > maxLength) {
-          maxLength = value.length;
-        }
-      }
-
-      // จำกัดความกว้างไม่เกิน maxWidth
-      columnWidths[column] = maxLength > maxWidth ? maxWidth : maxLength;
-    }
-
-    // สร้าง header
-    String header = '| ';
-    for (String column in columns) {
-      int width = columnWidths[column]!;
-      String displayColumn =
-          column.length > width
-              ? '${column.substring(0, width - 3)}...'
-              : column;
-      header += '${displayColumn.padRight(width)} | ';
-    }
-    debugPrint(header);
-
-    // สร้างเส้นแบ่ง
-    String separator = '|';
-    for (String column in columns) {
-      int width = columnWidths[column]!;
-      separator += '${'─' * (width + 2)}|';
-    }
-    debugPrint(separator);
-
-    // แสดงข้อมูลแต่ละแถว
-    for (int i = 0; i < tableData.length; i++) {
-      var record = tableData[i];
-      String row = '| ';
-
-      for (String column in columns) {
-        int width = columnWidths[column]!;
-        String value = record[column]?.toString() ?? '';
-
-        String displayValue;
-        if (value.length > width) {
-          displayValue = '${value.substring(0, width - 3)}...';
-        } else {
-          displayValue = value;
-        }
-
-        row += '${displayValue.padRight(width)} | ';
-      }
-      debugPrint(row);
-    }
-
-    // ปิดตาราง
-    debugPrint(separator);
-    debugPrint('📊 Total records: ${tableData.length}');
-  }
   // แสดงรายละเอียด Formula
   void _showFormulaDetails(BuildContext context, Map<String, dynamic> formula) {
     final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
@@ -564,6 +457,12 @@ Widget buildTapCardList() {
     switch (action) {
       case 'view':
         _showFormulaDetails(context, formula);
+        break;
+      case 'print':
+        // เรียกใช้ฟังก์ชันปริ้นข้อมูลจาก CardTestProvider
+        final cardTestProvider = Provider.of<CardTestProvider>(context, listen: false);
+        cardTestProvider.onCardTapped(formula);
+        _showMessage(context, 'Check console for printed data of "$formulaName"');
         break;
       case 'edit':
         _showMessage(context, 'Edit Formula feature coming soon!');

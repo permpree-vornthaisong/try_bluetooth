@@ -15,14 +15,31 @@ class CardTestProvider extends ChangeNotifier {
 
   /// ฟังก์ชันสำหรับกดที่ card แล้วปริ้นข้อมูล formula นั้นๆ
   Future<void> onCardTapped(Map<String, dynamic> formula) async {
-    if (_formulaProvider == null) return;
+    if (_formulaProvider == null) {
+      debugPrint('❌ FormulaProvider is null');
+      return;
+    }
 
     try {
-      debugPrint('🎯 Card tapped: ${formula.formulaName}');
-      debugPrint('=== PRINTING ${formula.formulaName.toUpperCase()} DATA ===');
+      final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
+      final formulaId = formula['id']?.toString() ?? '';
+      
+      debugPrint('🎯 Card tapped: $formulaName');
+      debugPrint('=== PRINTING ${formulaName.toUpperCase()} DATA ===');
+
+      // สร้าง table name จาก formula name หรือ id
+      String tableName;
+      if (formulaName.toLowerCase() != 'unknown') {
+        // ใช้ formula_name เป็น table name
+        tableName = 'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
+      } else {
+        // ใช้ id แทน
+        tableName = 'formula_$formulaId';
+      }
+
+      debugPrint('📋 Table name: $tableName');
 
       // ดึงข้อมูลจาก table
-      final tableName = formula.tableName;
       final tableData = await _formulaProvider!.getTableData(tableName);
       final columns = await _formulaProvider!.getTableColumns(tableName);
 
@@ -51,10 +68,10 @@ class CardTestProvider extends ChangeNotifier {
         _printTable(tableData, columns);
       }
 
-      debugPrint('✅ Finished printing ${formula.formulaName} data');
+      debugPrint('✅ Finished printing $formulaName data');
       debugPrint('');
     } catch (e) {
-      debugPrint('❌ Error: $e');
+      debugPrint('❌ Error in onCardTapped: $e');
     }
   }
 
