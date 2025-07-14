@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:try_bluetooth/pages/ViewDatabase.dart'; // เพิ่ม import ViewDatabase
 import 'package:try_bluetooth/pages/showCreateCustomerDialog.dart';
 import 'package:try_bluetooth/providers/FormulaProvider.dart';
 
@@ -9,56 +10,66 @@ class Cardtest extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Formula'), backgroundColor: Colors.blue),
+      appBar: AppBar(
+        title: Text('Data Base'),
+        backgroundColor: Colors.blue,
+        actions: [
+          IconButton(
+            onPressed: () => showCreateCustomerDialog(context),
+            icon: const Icon(Icons.add),
+            tooltip: 'Create New Formula',
+          ),
+        ],
+      ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.functions, size: 100, color: Colors.blue),
-            SizedBox(height: 20),
-            Text(
-              'Formula Page',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            // Icon(Icons.functions, size: 100, color: Colors.blue),
+            // SizedBox(height: 20),
+            // Text(
+            //   'Formula Page',
+            //   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            // ),
             SizedBox(height: 10),
-            Text(
-              'This is the formula testing page',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
+            // Text(
+            //   'This is the formula testing page',
+            //   style: TextStyle(fontSize: 16, color: Colors.grey),
+            // ),
             Expanded(child: buildTapCardList()),
-            ElevatedButton.icon(
-              onPressed: () => _showIconDialog(context),
-              icon: const Icon(Icons.category),
-              label: const Text('Show Icon Categories'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: () => showCreateCustomerDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Create New Formula'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-              ),
-            ),
+            // ElevatedButton.icon(
+            //   onPressed: () => _showIconDialog(context),
+            //   icon: const Icon(Icons.category),
+            //   label: const Text('Show Icon Categories'),
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: Colors.blue,
+            //     foregroundColor: Colors.white,
+            //     padding: const EdgeInsets.symmetric(
+            //       horizontal: 20,
+            //       vertical: 10,
+            //     ),
+            //   ),
+            // ),
+            // ElevatedButton.icon(
+            //   onPressed: () => showCreateCustomerDialog(context),
+            //   icon: const Icon(Icons.add),
+            //   label: const Text('Create New Formula'),
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: Colors.green,
+            //     foregroundColor: Colors.white,
+            //     padding: const EdgeInsets.symmetric(
+            //       horizontal: 20,
+            //       vertical: 10,
+            //     ),
+            //   ),
+            // ),
           ],
         ),
       ),
     );
   }
 
-Widget buildTapCardList() {
+  Widget buildTapCardList() {
     return Consumer<FormulaProvider>(
       builder: (context, formulaProvider, child) {
         // ตรวจสอบสถานะ initialization
@@ -154,12 +165,14 @@ Widget buildTapCardList() {
           itemCount: formulaCount,
           itemBuilder: (context, index) {
             final formula = formulas[index];
-            
+
             // ดึงข้อมูลจาก Map
-            final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
+            final formulaName =
+                formula['formula_name']?.toString() ?? 'Unknown';
             final columnCount = formula['column_count'] ?? 0;
             final description = formula['description']?.toString() ?? '';
-            final iconPath = formula['icon_path']?.toString() ?? 'assets/icons/cat.ico';
+            final iconPath =
+                formula['icon_path']?.toString() ?? 'assets/icons/cat.ico';
             final status = formula['status']?.toString() ?? 'active';
 
             return Card(
@@ -170,20 +183,22 @@ Widget buildTapCardList() {
                 splashColor: Colors.blue.withAlpha(30),
                 onTap: () async {
                   debugPrint('Formula "$formulaName" tapped.');
-                  
+
                   // 🎯 เพิ่มการปริ้นข้อมูลทุกอย่างใน Formula
                   await _printFormulaData(formulaProvider, formula);
-                  
-                  // แสดง dialog รายละเอียด
-                  _showFormulaDetails(context, formula);
+
+                  // 🚀 นำทางไปยัง ViewDatabase
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ViewDatabase(formula: formula),
+                    ),
+                  );
                 },
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [
-                        Colors.blue.shade50,
-                        Colors.white,
-                      ],
+                      colors: [Colors.blue.shade50, Colors.white],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -225,15 +240,54 @@ Widget buildTapCardList() {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                formulaName,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade800,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      formulaName,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade800,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  // เพิ่ม hint ว่าแตะเพื่อดูข้อมูล
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.green.shade300,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.touch_app,
+                                          size: 12,
+                                          color: Colors.green.shade700,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'TAP TO VIEW',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                               SizedBox(height: 4),
                               Row(
@@ -281,7 +335,10 @@ Widget buildTapCardList() {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: status == 'active' ? Colors.green : Colors.grey,
+                                color:
+                                    status == 'active'
+                                        ? Colors.green
+                                        : Colors.grey,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
@@ -295,53 +352,75 @@ Widget buildTapCardList() {
                             ),
                             SizedBox(height: 8),
                             PopupMenuButton<String>(
-                              onSelected: (value) => _handleFormulaAction(context, value, formula),
+                              onSelected:
+                                  (value) => _handleFormulaAction(
+                                    context,
+                                    value,
+                                    formula,
+                                  ),
                               icon: Icon(
                                 Icons.more_vert,
                                 color: Colors.grey[600],
                               ),
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: 'view',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.visibility, size: 16, color: Colors.blue),
-                                      SizedBox(width: 8),
-                                      Text('View Details'),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'print',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.print, size: 16, color: Colors.green),
-                                      SizedBox(width: 8),
-                                      Text('Print Data'),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit, size: 16, color: Colors.orange),
-                                      SizedBox(width: 8),
-                                      Text('Edit Formula'),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete, size: 16, color: Colors.red),
-                                      SizedBox(width: 8),
-                                      Text('Delete Formula'),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                              itemBuilder:
+                                  (context) => [
+                                    PopupMenuItem(
+                                      value: 'view',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.storage,
+                                            size: 16,
+                                            color: Colors.blue,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('View Database'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'details',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.info,
+                                            size: 16,
+                                            color: Colors.green,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('View Details'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'print',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.print,
+                                            size: 16,
+                                            color: Colors.orange,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('Print Data'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete,
+                                            size: 16,
+                                            color: Colors.red,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('Delete Formula'),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                             ),
                           ],
                         ),
@@ -358,11 +437,15 @@ Widget buildTapCardList() {
   }
 
   // 🎯 ฟังก์ชันปริ้นข้อมูลทุกอย่างใน Formula
-  Future<void> _printFormulaData(FormulaProvider provider, Map<String, dynamic> formula) async {
+  Future<void> _printFormulaData(
+    FormulaProvider provider,
+    Map<String, dynamic> formula,
+  ) async {
     try {
       final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
-      final tableName = 'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
-      
+      final tableName =
+          'formula_${formulaName.toLowerCase().replaceAll(' ', '_')}';
+
       debugPrint('🎯 Card tapped: $formulaName');
       debugPrint('=== PRINTING ${formulaName.toUpperCase()} DATA ===');
 
@@ -370,7 +453,9 @@ Widget buildTapCardList() {
       final tableData = await provider.getTableData(tableName);
       final columns = await provider.getTableColumns(tableName);
 
-      debugPrint('📊 Found ${tableData.length} records with ${columns.length} columns');
+      debugPrint(
+        '📊 Found ${tableData.length} records with ${columns.length} columns',
+      );
       debugPrint('');
 
       // ปริ้นข้อมูลทั้งหมด
@@ -468,6 +553,7 @@ Widget buildTapCardList() {
     debugPrint(separator);
     debugPrint('📊 Total records: ${tableData.length}');
   }
+
   // แสดงรายละเอียด Formula
   void _showFormulaDetails(BuildContext context, Map<String, dynamic> formula) {
     final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
@@ -478,95 +564,121 @@ Widget buildTapCardList() {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              padding: EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Image.asset(
-                iconPath,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(Icons.functions, color: Colors.blue);
-                },
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                formulaName,
-                style: TextStyle(fontSize: 18),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (description.isNotEmpty) ...[
-              Text(
-                'Description:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(description),
-              SizedBox(height: 12),
-            ],
-            Text(
-              'Columns ($columnCount):',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 4),
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: columnNames.map((column) => Chip(
-                label: Text(
-                  column,
-                  style: TextStyle(fontSize: 12),
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Image.asset(
+                    iconPath,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(Icons.functions, color: Colors.blue);
+                    },
+                  ),
                 ),
-                backgroundColor: Colors.blue.shade50,
-              )).toList(),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    formulaName,
+                    style: TextStyle(fontSize: 18),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Navigate to formula data page
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (description.isNotEmpty) ...[
+                  Text(
+                    'Description:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(description),
+                  SizedBox(height: 12),
+                ],
+                Text(
+                  'Columns ($columnCount):',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 4),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children:
+                      columnNames
+                          .map(
+                            (column) => Chip(
+                              label: Text(
+                                column,
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              backgroundColor: Colors.blue.shade50,
+                            ),
+                          )
+                          .toList(),
+                ),
+              ],
             ),
-            child: Text('View Data'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // นำทางไปยัง ViewDatabase
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ViewDatabase(formula: formula),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                child: Text('View Database'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   // จัดการ action menu
-  void _handleFormulaAction(BuildContext context, String action, Map<String, dynamic> formula) {
+  void _handleFormulaAction(
+    BuildContext context,
+    String action,
+    Map<String, dynamic> formula,
+  ) {
     final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
-    
+
     switch (action) {
       case 'view':
+        // นำทางไปยัง ViewDatabase
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewDatabase(formula: formula),
+          ),
+        );
+        break;
+      case 'details':
         _showFormulaDetails(context, formula);
         break;
-      case 'edit':
-        _showMessage(context, 'Edit Formula feature coming soon!');
+      case 'print':
+        // ปริ้นข้อมูลใน console
+        final provider = Provider.of<FormulaProvider>(context, listen: false);
+        _printFormulaData(provider, formula);
+        _showMessage(context, 'Data printed to console (check debug output)');
         break;
       case 'delete':
         _confirmDeleteFormula(context, formula);
@@ -575,50 +687,61 @@ Widget buildTapCardList() {
   }
 
   // ยืนยันการลบ Formula
-  void _confirmDeleteFormula(BuildContext context, Map<String, dynamic> formula) {
+  void _confirmDeleteFormula(
+    BuildContext context,
+    Map<String, dynamic> formula,
+  ) {
     final formulaName = formula['formula_name']?.toString() ?? 'Unknown';
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Delete Formula'),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to delete formula "$formulaName"?\n\nThis action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              
-              final provider = Provider.of<FormulaProvider>(context, listen: false);
-              final success = await provider.deleteFormula(
-                formula['id'] ?? 0,
-                formulaName,
-              );
-              
-              if (success) {
-                _showMessage(context, 'Formula "$formulaName" deleted successfully!');
-              } else {
-                _showMessage(context, 'Failed to delete formula: ${provider.lastError}');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Delete Formula'),
+              ],
             ),
-            child: Text('Delete'),
+            content: Text(
+              'Are you sure you want to delete formula "$formulaName"?\n\nThis action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+
+                  final provider = Provider.of<FormulaProvider>(
+                    context,
+                    listen: false,
+                  );
+                  final success = await provider.deleteFormula(
+                    formula['id'] ?? 0,
+                    formulaName,
+                  );
+
+                  if (success) {
+                    _showMessage(
+                      context,
+                      'Formula "$formulaName" deleted successfully!',
+                    );
+                  } else {
+                    _showMessage(
+                      context,
+                      'Failed to delete formula: ${provider.lastError}',
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: Text('Delete'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -789,50 +912,10 @@ Widget buildTapCardList() {
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 10,
-              ),
+              style: const TextStyle(fontSize: 10),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Helper function for FontAwesome icons
-  Widget _buildIconButton(IconData icon, String label) {
-    return GestureDetector(
-      onTap: () {
-        debugPrint('$label icon tapped!');
-      },
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Icon(icon, size: 25, color: Colors.black87),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Flexible(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 9),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
             ),
           ],
         ),
